@@ -1,12 +1,12 @@
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  Users, 
-  ShoppingCart, 
-  DollarSign, 
-  Package, 
-  TrendingUp, 
+import {
+  Users,
+  ShoppingCart,
+  DollarSign,
+  Package,
+  TrendingUp,
   TrendingDown,
   Eye,
   MoreVertical,
@@ -142,38 +142,6 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-soft-ivory">
-      {/* Admin Header */}
-      <header className="bg-deep-indigo text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Link to="/" className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-coral-pink rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">E</span>
-                </div>
-                <span className="text-xl font-bold">EcomStore Admin</span>
-              </Link>
-            </div>
-            
-            <nav className="hidden md:flex space-x-6">
-              <Link to="/admin/dashboard" className="text-electric-aqua font-medium">Dashboard</Link>
-              <Link to="/admin/products" className="hover:text-electric-aqua transition-colors">Products</Link>
-              <Link to="/admin/orders" className="hover:text-electric-aqua transition-colors">Orders</Link>
-              <Link to="/admin/users" className="hover:text-electric-aqua transition-colors">Users</Link>
-              <Link to="/admin/categories" className="hover:text-electric-aqua transition-colors">Categories</Link>
-            </nav>
-            
-            <div className="flex items-center space-x-4">
-              <Button variant="outline" size="sm" className="border-white text-white hover:bg-white hover:text-deep-indigo">
-                <Link to="/">View Store</Link>
-              </Button>
-              <div className="w-8 h-8 bg-coral-pink rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">A</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Page Header */}
@@ -182,7 +150,7 @@ const AdminDashboard = () => {
             <h1 className="text-3xl font-bold text-charcoal-gray">Dashboard</h1>
             <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your store.</p>
           </div>
-          
+
           <div className="flex items-center space-x-4 mt-4 md:mt-0">
             <Select value={dateRange} onValueChange={setDateRange}>
               <SelectTrigger className="w-40">
@@ -196,7 +164,7 @@ const AdminDashboard = () => {
                 <SelectItem value="1y">Last year</SelectItem>
               </SelectContent>
             </Select>
-            
+
             <Button variant="outline">
               <Download className="w-4 h-4 mr-2" />
               Export
@@ -252,7 +220,7 @@ const AdminDashboard = () => {
                   </Link>
                 </div>
               </div>
-              
+
               <div className="p-6">
                 <div className="space-y-4">
                   {recentOrders.map((order) => (
@@ -267,13 +235,13 @@ const AdminDashboard = () => {
                         <p className="text-sm text-gray-600">{order.customer}</p>
                         <p className="text-xs text-gray-500">{order.email}</p>
                       </div>
-                      
+
                       <div className="text-right ml-4">
                         <p className="font-semibold text-charcoal-gray">${order.total}</p>
                         <p className="text-sm text-gray-500">{order.items} items</p>
                         <p className="text-xs text-gray-400">{order.date}</p>
                       </div>
-                      
+
                       <Button variant="ghost" size="sm" className="ml-2">
                         <MoreVertical className="w-4 h-4" />
                       </Button>
@@ -291,7 +259,7 @@ const AdminDashboard = () => {
               <div className="p-6 border-b">
                 <h2 className="text-xl font-semibold text-charcoal-gray">Top Products</h2>
               </div>
-              
+
               <div className="p-6">
                 <div className="space-y-4">
                   {topProducts.map((product) => (
@@ -324,7 +292,7 @@ const AdminDashboard = () => {
               <div className="p-6 border-b">
                 <h2 className="text-xl font-semibold text-charcoal-gray">Category Performance</h2>
               </div>
-              
+
               <div className="p-6">
                 <div className="space-y-4">
                   {categoryStats.map((category) => (
