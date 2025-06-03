@@ -17,6 +17,8 @@ import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
 import Profile from "./pages/Profile";
 import Support from "./pages/Support";
+import LiveChat from '@/pages/LiveChat';
+import OrderConfirmation from './pages/OrderConfirmation';
 import NotFound from "./pages/NotFound"; // For general 404
 
 // Admin Pages and Layout
@@ -57,9 +59,11 @@ const App = () => {
             <Route path="/wishlist" element={<Wishlist />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/order-confirmation" element={<OrderConfirmation />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/live-chat" element={<LiveChat />} />
             <Route path="/support" element={<Support />} />
-            
+
             {/* Admin Login Route - This typically does NOT use the AdminLayout */}
             <Route path="/admin" element={<AdminLogin />} />
 
@@ -70,9 +74,9 @@ const App = () => {
               {/* Dashboard is often the default page after admin login.
                   'index' makes it render when the parent path '/admin' is matched exactly.
                   We'll also keep a specific '/admin/dashboard' path for clarity and direct access. */}
-              <Route index element={<AdminDashboard />} /> 
+              <Route index element={<AdminDashboard />} />
               <Route path="dashboard" element={<AdminDashboard />} /> {/* No duplicate route now */}
-              
+
               <Route path="users" element={<AdminUsers />} />
               <Route path="categories" element={<AdminCategories />} />
               <Route path="products" element={<AdminProducts />} />
@@ -82,9 +86,9 @@ const App = () => {
               <Route path="returns" element={<AdminReturns />} />
 
               {/* Admin 404 - For any unmatched paths within /admin/* */}
-              <Route path="*" element={<NotFound />} /> 
+              <Route path="*" element={<NotFound />} />
             </Route>
-            
+
             {/* Global 404 Route - This catches any other paths that haven't been matched */}
             {/* Place this last to ensure all other specific routes are checked first */}
             <Route path="*" element={<NotFound />} />

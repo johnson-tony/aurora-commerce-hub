@@ -309,12 +309,14 @@ const Index = () => {
 
       {/* Floating Chat Support */}
       <div className="fixed bottom-6 right-6 z-50">
+      <Link to="/live-chat"> 
         <Button
           size="lg"
           className="rounded-full w-14 h-14 bg-coral-pink hover:bg-coral-pink/90 shadow-lg"
         >
           <span className="text-lg">💬</span>
         </Button>
+        </Link>
       </div>
     </div>
   );
