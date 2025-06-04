@@ -2,22 +2,64 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
 const path = require("path");
+const multer = require("multer"); // <--- ADD THIS LINE
+const fs = require("fs"); // <--- ADD THIS LINE to ensure directory exists
 
 // --- Import your specialized routers ---
-// These paths are relative to the server.js file
 const adminCategoryRoutes = require("./routes/adminCategoryRoutes");
 const publicCategoryRoutes = require("./routes/publicCategoryRoutes");
+const adminProductRoutes = require("./routes/adminProductRoutes");
 
 const app = express();
 const PORT = 5000;
 
 // --- Global Middleware (applies to all requests) ---
-app.use(cors()); // Enables Cross-Origin Resource Sharing
-app.use(express.json({ limit: "50mb" })); // Parses JSON request bodies, allows large payloads for images
-app.use("/uploads", express.static(path.join(__dirname, "uploads"))); // Serves static files from the 'uploads' directory
+app.use(cors());
+app.use(express.json({ limit: "50mb" })); // Increased limit for potential Base64 images or large JSON payloads
+
+// Ensure the 'uploads' directory exists
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true }); // Create directory if it doesn't exist
+}
+// Serve static files from the 'uploads' directory
+app.use("/uploads", express.static(uploadsDir));
+
+// --- Multer Storage Configuration ---
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir); // Save uploaded files to the 'uploads' directory
+  },
+  filename: (req, file, cb) => {
+    // Generate a unique filename to prevent clashes
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname) // Keep original file extension
+    );
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// --- API Endpoint for Image Uploads ---
+// This will handle POST requests to http://localhost:5000/api/upload/image
+app.post("/api/upload/image", upload.single("productImage"), (req, res) => {
+  // 'productImage' is the name of the input field in your frontend form
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded." });
+  }
+
+  // Construct the public URL for the uploaded image
+  // This URL must match how you're serving static files above (e.g., /uploads)
+  const imageUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+  res.status(200).json({
+    message: "File uploaded successfully",
+    imageUrl: imageUrl, // Send the public URL back to the frontend
+  });
+});
 
 // --- Main SQLite Database Connection ---
-// This connection is managed by the main server.js
 const dbPath = path.resolve(__dirname, "ecommerce_admin.db");
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
@@ -40,12 +82,32 @@ const db = new sqlite3.Database(dbPath, (err) => {
         }
       }
     );
+
+    // Create products table if it doesn't exist
+    db.run(
+      `CREATE TABLE IF NOT EXISTS products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        price REAL NOT NULL,
+        discount REAL DEFAULT 0,
+        stock INTEGER NOT NULL,
+        category TEXT NOT NULL,
+        available INTEGER DEFAULT 1, -- SQLite uses 0 for false, 1 for true
+        images TEXT -- Store as a JSON string of image URLs
+      )`,
+      (err) => {
+        if (err) {
+          console.error("Error creating products table:", err.message);
+        } else {
+          console.log("Products table ensured.");
+        }
+      }
+    );
   }
 });
 
 // IMPORTANT: Helper functions for database queries.
-// These are defined here and are attached to app.locals so routers can access them.
-// This avoids creating new DB connections in each router file.
 app.locals.dbRun = (query, params = []) => {
   return new Promise((resolve, reject) => {
     db.run(query, params, function (err) {
@@ -70,17 +132,10 @@ app.locals.dbAll = (query, params = []) => {
   });
 };
 
-
 // --- Mount your routers (assign base paths to the "chefs") ---
-
-// Admin Category APIs: All requests starting with /api/admin/categories
-// will be handled by the adminCategoryRoutes router.
 app.use("/api/admin/categories", adminCategoryRoutes);
-
-// Public Category APIs: All requests starting with /api/categories
-// will be handled by the publicCategoryRoutes router.
 app.use("/api/categories", publicCategoryRoutes);
-
+app.use("/api/admin/products", adminProductRoutes);
 
 // --- Start the server ---
 app.listen(PORT, () => {
