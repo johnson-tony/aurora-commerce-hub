@@ -1,14 +1,20 @@
-
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Minus, Plus, Trash2, ShoppingCart, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, ArrowLeft } from 'lucide-react';
 import Navigation from '@/components/Navigation';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Badge } from '@/components/ui/badge';
+// Card, Separator, Badge are now used within the new sub-components,
+// so they are removed from here to keep imports clean.
+// import { Card } from '@/components/ui/card';
+// import { Separator } from '@/components/ui/separator';
+// import { Badge } from '@/components/ui/badge';
+
+// --- CORRECT IMPORTS for Cart-specific components (from the 'cart' subfolder) ---
+import CartItemCard from './cart/CartItemCard'; // Path to the lowercase 'cart' folder
+import OrderSummary from './cart/OrderSummary';   // Path to the lowercase 'cart' folder
 
 const Cart = () => {
+  // State for cart items remains in the main Cart component
   const [cartItems, setCartItems] = useState([
     {
       id: 1,
@@ -45,6 +51,7 @@ const Cart = () => {
     }
   ]);
 
+  // Functions to update/remove items also remain here as they manipulate the main state
   const updateQuantity = (id: number, newQuantity: number) => {
     setCartItems(items =>
       items.map(item =>
@@ -57,11 +64,13 @@ const Cart = () => {
     setCartItems(items => items.filter(item => item.id !== id));
   };
 
+  // Calculations also remain here as they depend on the main state
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const savings = cartItems.reduce((sum, item) => sum + ((item.originalPrice - item.price) * item.quantity), 0);
   const shipping = subtotal > 99 ? 0 : 9.99;
   const total = subtotal + shipping;
 
+  // Conditional rendering for empty cart
   if (cartItems.length === 0) {
     return (
       <div className="min-h-screen bg-soft-ivory">
@@ -85,7 +94,7 @@ const Cart = () => {
   return (
     <div className="min-h-screen bg-soft-ivory">
       <Navigation />
-      
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center mb-8">
@@ -100,162 +109,26 @@ const Cart = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Cart Items */}
+          {/* Cart Items List */}
           <div className="lg:col-span-2 space-y-4">
             {cartItems.map((item) => (
-              <Card key={item.id} className="p-6 bg-white">
-                <div className="flex flex-col md:flex-row md:items-center space-y-4 md:space-y-0 md:space-x-6">
-                  {/* Product Image */}
-                  <div className="flex-shrink-0">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-24 h-24 object-cover rounded-lg"
-                    />
-                  </div>
-
-                  {/* Product Details */}
-                  <div className="flex-1 min-w-0">
-                    <Link to={`/product/${item.id}`} className="hover:text-electric-aqua">
-                      <h3 className="text-lg font-semibold text-charcoal-gray mb-2">{item.name}</h3>
-                    </Link>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <p>Color: {item.color}</p>
-                      <p>Size: {item.size}</p>
-                      {item.inStock ? (
-                        <p className="text-green-600 font-medium">In Stock</p>
-                      ) : (
-                        <p className="text-red-600 font-medium">Out of Stock</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Price and Quantity */}
-                  <div className="flex flex-col md:items-end space-y-4">
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-deep-indigo">${item.price}</div>
-                      {item.originalPrice > item.price && (
-                        <div className="text-sm text-gray-500 line-through">${item.originalPrice}</div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      {/* Quantity Controls */}
-                      <div className="flex items-center border rounded-lg">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="p-2 hover:bg-gray-100"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="px-4 py-2 border-x min-w-[50px] text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="p-2 hover:bg-gray-100"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-
-                      {/* Remove Button */}
-                      <button
-                        onClick={() => removeItem(item.id)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Item Total */}
-                    <div className="text-right font-semibold text-charcoal-gray">
-                      ${(item.price * item.quantity).toFixed(2)}
-                    </div>
-                  </div>
-                </div>
-              </Card>
+              <CartItemCard
+                key={item.id}
+                item={item}
+                updateQuantity={updateQuantity}
+                removeItem={removeItem}
+              />
             ))}
           </div>
 
-          {/* Order Summary */}
-          <div className="lg:col-span-1">
-            <Card className="p-6 bg-white sticky top-8">
-              <h2 className="text-xl font-bold text-charcoal-gray mb-6">Order Summary</h2>
-              
-              <div className="space-y-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal ({cartItems.length} items)</span>
-                  <span className="font-medium">${subtotal.toFixed(2)}</span>
-                </div>
-                
-                {savings > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Savings</span>
-                    <span className="font-medium text-green-600">-${savings.toFixed(2)}</span>
-                  </div>
-                )}
-                
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Shipping</span>
-                  <span className="font-medium">
-                    {shipping === 0 ? (
-                      <span className="text-green-600">Free</span>
-                    ) : (
-                      `$${shipping.toFixed(2)}`
-                    )}
-                  </span>
-                </div>
-                
-                {shipping > 0 && (
-                  <div className="text-xs text-gray-500">
-                    Add ${(99 - subtotal).toFixed(2)} more for free shipping
-                  </div>
-                )}
-                
-                <Separator />
-                
-                <div className="flex justify-between text-lg font-bold">
-                  <span className="text-charcoal-gray">Total</span>
-                  <span className="text-deep-indigo">${total.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-3">
-                <Link to="/checkout">
-                  <Button size="lg" className="w-full bg-deep-indigo hover:bg-deep-indigo/90">
-                    Proceed to Checkout
-                  </Button>
-                </Link>
-                
-                <Link to="/products">
-                  <Button size="lg" variant="outline" className="w-full">
-                    Continue Shopping
-                  </Button>
-                </Link>
-              </div>
-
-              {/* Promo Code */}
-              <div className="mt-6 pt-6 border-t">
-                <h3 className="font-medium text-charcoal-gray mb-3">Promo Code</h3>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    placeholder="Enter code"
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                  />
-                  <Button size="sm" variant="outline" className="text-coral-pink border-coral-pink hover:bg-coral-pink hover:text-white">
-                    Apply
-                  </Button>
-                </div>
-              </div>
-
-              {/* Security Badge */}
-              <div className="mt-6 pt-6 border-t text-center">
-                <div className="text-xs text-gray-500">
-                  🔒 Secure checkout with SSL encryption
-                </div>
-              </div>
-            </Card>
-          </div>
+          {/* Order Summary Section */}
+          <OrderSummary
+            cartItemsCount={cartItems.length}
+            subtotal={subtotal}
+            savings={savings}
+            shipping={shipping}
+            total={total}
+          />
         </div>
       </div>
     </div>
