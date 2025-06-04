@@ -1,68 +1,23 @@
 const express = require("express");
-const router = express.Router(); // This is the Express Router for admin categories
-const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
+const router = express.Router(); // Create an Express Router
 
-// IMPORTANT: Database connection for this router.
-// In a larger application, you might pass the 'db' instance from server.js
-// to avoid multiple connections. For simplicity and to make this router self-contained,
-// we'll establish a connection here. Ensure the path to the DB is correct.
-const dbPath = path.resolve(__dirname, "..", "ecommerce_admin.db"); // Go up one level from 'routes'
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error("Error connecting to database in adminCategoryRoutes:", err.message);
-  } else {
-    console.log("Connected to the SQLite database from adminCategoryRoutes.");
-    // Ensure categories table exists (though server.js also does this)
-    db.run(
-      `CREATE TABLE IF NOT EXISTS categories (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        image TEXT,
-        display_order INTEGER
-      )`,
-      (err) => {
-        if (err) {
-          console.error("Error creating categories table in adminCategoryRoutes:", err.message);
-        }
-      }
-    );
-  }
+// IMPORTANT: Access database helper functions from app.locals
+// This middleware runs for every request hitting this router.
+// It attaches dbRun and dbAll to the request object for easy access.
+router.use((req, res, next) => {
+  req.dbRun = req.app.locals.dbRun;
+  req.dbAll = req.app.locals.dbAll;
+  next(); // Pass control to the next middleware/route handler
 });
 
-// Helper functions for database queries (copied from your original server.js)
-const dbRun = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(query, params, function (err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, changes: this.changes });
-      }
-    });
-  });
-};
-
-const dbAll = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
-};
-
 // --- Admin API Endpoints for Categories ---
-// Note: The paths here are relative to where this router will be "mounted" in server.js
+// Note: The paths here are relative to where this router is "mounted" in server.js
 // If mounted at "/api/admin/categories", then "/" here means "/api/admin/categories"
 
 // GET all categories (Admin)
 router.get("/", async (req, res) => {
   try {
-    const categories = await dbAll(
+    const categories = await req.dbAll( // Use req.dbAll to access the helper function
       "SELECT * FROM categories ORDER BY display_order ASC"
     );
     res.json(categories);
@@ -80,12 +35,12 @@ router.post("/", async (req, res) => {
       .json({ error: "Category name and image are required." });
   }
   try {
-    const result = await dbAll(
+    const result = await req.dbAll( // Use req.dbAll
       "SELECT MAX(display_order) AS max_order FROM categories"
     );
     const nextOrder = (result[0].max_order || 0) + 1;
 
-    const { id } = await dbRun(
+    const { id } = await req.dbRun( // Use req.dbRun
       "INSERT INTO categories (name, image, display_order) VALUES (?, ?, ?)",
       [name, image, nextOrder]
     );
@@ -107,7 +62,7 @@ router.put("/:id", async (req, res) => {
   }
 
   try {
-    const { changes } = await dbRun(
+    const { changes } = await req.dbRun( // Use req.dbRun
       "UPDATE categories SET name = ?, image = ?, display_order = ? WHERE id = ?",
       [name, image, order, id]
     );
@@ -124,7 +79,7 @@ router.put("/:id", async (req, res) => {
 router.delete("/:id", async (req, res) => {
   const { id } = req.params;
   try {
-    const { changes } = await dbRun("DELETE FROM categories WHERE id = ?", [
+    const { changes } = await req.dbRun("DELETE FROM categories WHERE id = ?", [ // Use req.dbRun
       id,
     ]);
     if (changes === 0) {
@@ -137,7 +92,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 // Reorder categories (Admin)
-router.put("/reorder", async (req, res) => { // Changed to PUT for reorder based on common API practices
+router.put("/reorder", async (req, res) => {
   const { categories: orderedCategories } = req.body;
 
   if (!Array.isArray(orderedCategories) || orderedCategories.length === 0) {
@@ -150,19 +105,19 @@ router.put("/reorder", async (req, res) => { // Changed to PUT for reorder based
   }
 
   try {
-    await dbRun("BEGIN TRANSACTION");
+    await req.dbRun("BEGIN TRANSACTION"); // Use req.dbRun
     for (const cat of orderedCategories) {
-      await dbRun("UPDATE categories SET display_order = ? WHERE id = ?", [
+      await req.dbRun("UPDATE categories SET display_order = ? WHERE id = ?", [ // Use req.dbRun
         cat.order,
         cat.id,
       ]);
     }
-    await dbRun("COMMIT");
+    await req.dbRun("COMMIT"); // Use req.dbRun
     res.json({ message: "Categories reordered successfully." });
   } catch (err) {
-    await dbRun("ROLLBACK");
+    await req.dbRun("ROLLBACK"); // Use req.dbRun
     res.status(500).json({ error: err.message });
   }
 });
 
-module.exports = router; // Export this router
+module.exports = router; // Export the router

@@ -219,7 +219,6 @@ const Index = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                   <div className="absolute bottom-4 left-4 text-white">
                     <h3 className="text-xl font-bold mb-1">{category.name}</h3>
-                    <p className="text-sm opacity-90">{category.description}</p>
                     <p className="text-xs opacity-75 mt-1">{category.items}</p>
                   </div>
                 </div>
