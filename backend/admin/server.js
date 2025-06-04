@@ -2,8 +2,8 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
 const path = require("path");
-const multer = require("multer"); // <--- ADD THIS LINE
-const fs = require("fs"); // <--- ADD THIS LINE to ensure directory exists
+const multer = require("multer");
+const fs = require("fs");
 
 // --- Import your specialized routers ---
 const adminCategoryRoutes = require("./routes/adminCategoryRoutes");
@@ -17,29 +17,48 @@ const PORT = 5000;
 app.use(cors());
 app.use(express.json({ limit: "50mb" })); // Increased limit for potential Base64 images or large JSON payloads
 
-// Ensure the 'uploads' directory exists
+// --- Image Uploads Directory Setup ---
+// This assumes index.js is directly in the 'backend' folder
 const uploadsDir = path.join(__dirname, "uploads");
+
+// Ensure the 'uploads' directory exists
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true }); // Create directory if it doesn't exist
+  console.log(`Created uploads directory at: ${uploadsDir}`);
+} else {
+  console.log(`Uploads directory already exists at: ${uploadsDir}`);
 }
+
 // Serve static files from the 'uploads' directory
+// Requests to http://localhost:5000/uploads/... will be served from D:\aurora-commerce-hub\backend\uploads
 app.use("/uploads", express.static(uploadsDir));
+console.log(`Serving static files from /uploads at: ${uploadsDir}`);
 
 // --- Multer Storage Configuration ---
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
+    // Check if the uploads directory exists before calling cb
+    if (!fs.existsSync(uploadsDir)) {
+      // This should ideally be caught by the fs.mkdirSync above, but good for robustness
+      console.error(
+        `Multer destination error: Directory not found - ${uploadsDir}`
+      );
+      return cb(new Error("Uploads directory not found or not writable"), null);
+    }
     cb(null, uploadsDir); // Save uploaded files to the 'uploads' directory
   },
   filename: (req, file, cb) => {
     // Generate a unique filename to prevent clashes
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    // Use the original extension
     cb(
       null,
-      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname) // Keep original file extension
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
     );
   },
 });
 
+// Multer instance for handling uploads
 const upload = multer({ storage: storage });
 
 // --- API Endpoint for Image Uploads ---
