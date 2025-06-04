@@ -38,7 +38,7 @@ const HeroSection: React.FC = () => {
   }, [heroSlides.length]);
 
   return (
-    <section className="relative h-96 md:h-[500px] overflow-hidden">
+    <section className="relative h-64 md:h-[300px] overflow-hidden"> {/* Height reduced further here */}
       {heroSlides.map((slide, index) => (
         <div
           key={index}
@@ -54,14 +54,14 @@ const HeroSection: React.FC = () => {
             />
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
               <div className="text-center text-white px-4">
-                <h1 className="text-4xl md:text-6xl font-bold mb-4 animate-fade-in">
+                <h1 className="text-3xl md:text-5xl font-bold mb-2 animate-fade-in"> {/* Adjusted text size */}
                   {slide.title}
                 </h1>
-                <p className="text-lg md:text-xl mb-8 animate-fade-in">
+                <p className="text-base md:text-lg mb-4 animate-fade-in"> {/* Adjusted text size */}
                   {slide.subtitle}
                 </p>
                 <Link to={slide.link}>
-                  <Button size="lg" className="bg-coral-pink hover:bg-coral-pink/90 text-white">
+                  <Button  className="bg-coral-pink hover:bg-coral-pink/90 text-white"> {/* Adjusted button size */}
                     {slide.cta}
                   </Button>
                 </Link>

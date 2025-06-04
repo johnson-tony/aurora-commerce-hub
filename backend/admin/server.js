@@ -9,6 +9,7 @@ const fs = require("fs"); // <--- ADD THIS LINE to ensure directory exists
 const adminCategoryRoutes = require("./routes/adminCategoryRoutes");
 const publicCategoryRoutes = require("./routes/publicCategoryRoutes");
 const adminProductRoutes = require("./routes/adminProductRoutes");
+const publicProductRoutes = require("./routes/publicProductRoutes");
 
 const app = express();
 const PORT = 5000;
@@ -136,6 +137,7 @@ app.locals.dbAll = (query, params = []) => {
 app.use("/api/admin/categories", adminCategoryRoutes);
 app.use("/api/categories", publicCategoryRoutes);
 app.use("/api/admin/products", adminProductRoutes);
+app.use("/api/products", publicProductRoutes);
 
 // --- Start the server ---
 app.listen(PORT, () => {

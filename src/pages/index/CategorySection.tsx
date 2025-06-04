@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// The path for Card is still relative to your project's root or alias
-import { Card } from '@/components/ui/card';
+// Removed Card import as it's no longer used for individual category items
+// import { Card } from '@/components/ui/card';
 
 // Define a type for your category data for better type safety
 interface Category {
@@ -46,8 +46,7 @@ const CategorySection: React.FC = () => {
   }, []); // Empty dependency array means this runs once after the initial render
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-16">
-      <h2 className="text-3xl font-bold text-charcoal-gray mb-8 text-center">Shop by Category</h2>
+    <section className="max-w-7xl mx-auto px-4 py-8">
       {loadingCategories ? (
         <p className="text-center text-gray-700">Loading categories...</p>
       ) : categoriesError ? (
@@ -55,29 +54,26 @@ const CategorySection: React.FC = () => {
       ) : categories.length === 0 ? (
         <p className="text-center text-gray-700">No categories found.</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
           {categories.map((category) => (
-            // Use category.id for the key (unique from DB)
-            // Link to a dynamic path using category name (slugified)
-            <Link key={category.id} to={`/products/${category.name.toLowerCase().replace(/\s/g, '-')}`} className="group">
-              <Card className="overflow-hidden bg-white hover:shadow-xl transition-all duration-300">
-                <div className="relative h-48">
-                  <img
-                    src={category.image} // Use the 'image' field from your SQLite DB
-                    alt={category.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-4 left-4 text-white">
-                    <h3 className="text-xl font-bold mb-1">{category.name}</h3>
-                    {/* The 'items' count is not directly available from your current API.
-                        You would need a separate API endpoint to fetch item counts per category,
-                        or include it in the category object if your backend provides it.
-                        For now, this line is removed or can be a placeholder. */}
-                    {/* <p className="text-xs opacity-75 mt-1">{category.items}</p> */}
-                  </div>
-                </div>
-              </Card>
+            <Link
+              key={category.id}
+              to={`/products/${category.name.toLowerCase().replace(/\s/g, '-')}`}
+              className="group flex flex-col items-center text-center p-2 rounded-lg transition-all duration-300 hover:bg-gray-100 hover:shadow-md"
+            >
+              <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden mb-2">
+                <img
+                  src={category.image}
+                  alt={category.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                {/* Optional overlay for text readability */}
+                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
+              </div>
+              <h3 className="text-sm sm:text-base font-semibold text-charcoal-gray group-hover:text-deep-indigo transition-colors">
+                {category.name}
+              </h3>
+              {/* Removed category.items as it's not provided by your API */}
             </Link>
           ))}
         </div>

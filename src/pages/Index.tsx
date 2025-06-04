@@ -12,8 +12,8 @@ const Index: React.FC = () => {
   return (
     <div className="min-h-screen bg-soft-ivory">
       <Navigation />
-      <HeroSection/>
       <CategorySection />
+      <HeroSection />
       <FeaturedProductsSection />
       <NewsletterSection />
       {/* Floating Chat Support */}
