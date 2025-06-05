@@ -11,6 +11,8 @@ const publicCategoryRoutes = require("./routes/publicCategoryRoutes");
 const adminProductRoutes = require("./routes/adminProductRoutes");
 const publicProductRoutes = require("./routes/publicProductRoutes");
 const adminSubcategoryRoutes = require("./routes/adminSubcategoryRoutes"); // Import the new subcategory router
+const adminCouponRoutes = require("./routes/adminCouponRoutes"); // <--- NEW: Import admin coupon routes
+
 
 const app = express();
 const PORT = 5000;
@@ -126,6 +128,32 @@ const db = new sqlite3.Database(dbPath, (err) => {
         }
       }
     );
+
+    // --- NEW: Create coupons table if it doesn't exist ---
+    db.run(
+      `CREATE TABLE IF NOT EXISTS coupons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        description TEXT,
+        discount_type TEXT NOT NULL, -- 'percentage', 'fixed_amount', 'free_shipping'
+        discount_value REAL NOT NULL,
+        minimum_spend REAL,
+        usage_limit_per_coupon INTEGER,
+        usage_limit_per_customer INTEGER,
+        start_date TEXT NOT NULL, -- Storing as TEXT in YYYY-MM-DD format for dates
+        end_date TEXT NOT NULL,   -- Storing as TEXT in YYYY-MM-DD format for dates
+        is_active INTEGER DEFAULT 1, -- 0 for false, 1 for true
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )`,
+      (err) => {
+        if (err) {
+          console.error("Error creating coupons table:", err.message);
+        } else {
+          console.log("Coupons table ensured.");
+        }
+      }
+    );
   }
 });
 
@@ -155,12 +183,27 @@ app.locals.dbAll = (query, params = []) => {
   });
 };
 
+app.locals.dbGet = (query, params = []) => {
+  // <--- NEW: Add dbGet for fetching single row
+  return new Promise((resolve, reject) => {
+    db.get(query, params, (err, row) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(row);
+      }
+    });
+  });
+};
+
 // --- Mount your routers (assign base paths to the "chefs") ---
 app.use("/api/admin/categories", adminCategoryRoutes);
 app.use("/api/admin/categories", adminSubcategoryRoutes); // Subcategory routes are nested under /api/admin/categories
 app.use("/api/categories", publicCategoryRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/products", publicProductRoutes);
+app.use("/api/admin/coupons", adminCouponRoutes); // <--- NEW: Mount admin coupon routes
+
 
 // --- Start the server ---
 app.listen(PORT, () => {
