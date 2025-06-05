@@ -1,83 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// Removed Card import as it's no longer used for individual category items
-// import { Card } from '@/components/ui/card';
 
-// Define a type for your category data for better type safety
 interface Category {
   id: number;
   name: string;
   image: string;
   display_order: number;
-  // Add other properties if your backend sends them, e.g., description, items
 }
 
 const CategorySection: React.FC = () => {
-  // State for categories fetched from the backend
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState<boolean>(true);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  // useEffect to fetch categories from your backend
   useEffect(() => {
     const fetchCategoriesFromBackend = async () => {
       try {
-        setLoadingCategories(true); // Start loading
-        setCategoriesError(null); // Clear previous errors
-
-        // Your Node.js public API endpoint for categories
+        setLoadingCategories(true);
+        setCategoriesError(null);
         const response = await fetch('http://localhost:5000/api/categories');
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data: Category[] = await response.json(); // Type assertion for fetched data
-        setCategories(data); // Update the state with fetched categories
-      } catch (error: any) { // Use 'any' or check 'error instanceof Error'
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data: Category[] = await response.json();
+        setCategories(data);
+      } catch (error: any) {
         console.error("Error fetching categories:", error);
-        setCategoriesError("Failed to load categories. Please try again later.");
+        setCategoriesError("Failed to load categories");
       } finally {
-        setLoadingCategories(false); // End loading
+        setLoadingCategories(false);
       }
     };
-
-    fetchCategoriesFromBackend(); // Call the fetch function when the component mounts
-  }, []); // Empty dependency array means this runs once after the initial render
+    fetchCategoriesFromBackend();
+  }, []);
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-8">
-      {loadingCategories ? (
-        <p className="text-center text-gray-700">Loading categories...</p>
-      ) : categoriesError ? (
-        <p className="text-center text-red-600">{categoriesError}</p>
-      ) : categories.length === 0 ? (
-        <p className="text-center text-gray-700">No categories found.</p>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-6">
-          {categories.map((category) => (
-            <Link
-              key={category.id}
-              to={`/products/${category.name.toLowerCase().replace(/\s/g, '-')}`}
-              className="group flex flex-col items-center text-center p-2 rounded-lg transition-all duration-300 hover:bg-gray-100 hover:shadow-md"
-            >
-              <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full overflow-hidden mb-2">
-                <img
-                  src={category.image}
-                  alt={category.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                />
-                {/* Optional overlay for text readability */}
-                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
+    <section className="max-w-7xl mx-auto bg-white py-4">
+      <div className="flex overflow-x-auto hide-scrollbar px-4">
+        {loadingCategories ? (
+          <div className="flex space-x-8">
+            {[...Array(10)].map((_, index) => (
+              <div key={index} className="flex flex-col items-center min-w-[80px]">
+                <div className="w-16 h-16 bg-gray-200 rounded-md mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
               </div>
-              <h3 className="text-sm sm:text-base font-semibold text-charcoal-gray group-hover:text-deep-indigo transition-colors">
-                {category.name}
-              </h3>
-              {/* Removed category.items as it's not provided by your API */}
-            </Link>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        ) : categoriesError ? (
+          <p className="text-red-500 text-sm px-4">{categoriesError}</p>
+        ) : categories.length === 0 ? (
+          <p className="text-gray-500 text-sm px-4">No categories available</p>
+        ) : (
+          <div className="flex space-x-8">
+            {categories.map((category) => (
+              <Link
+                key={category.id}
+                to={`/products/${category.name.toLowerCase().replace(/\s/g, '-')}`}
+                className="flex flex-col items-center min-w-[80px] group"
+              >
+                <div className="w-16 h-16 bg-white rounded-md mb-2 overflow-hidden flex items-center justify-center p-1">
+                  <img
+                    src={category.image}
+                    alt={category.name}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <span className="text-xs font-medium text-gray-800 text-center group-hover:text-blue-500">
+                  {category.name}
+                </span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 };
