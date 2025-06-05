@@ -6,7 +6,13 @@ import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { useState } from "react";
 
 // Public Pages
+import { AuthProvider } from './context/AuthContext'; // Import AuthProvider
+import { ProtectedRoute } from './pages/auth/ProtectedRoute'; // Import ProtectedRoute
 import Index from "./pages/Index";
+import LoginPage from './pages/auth/LoginPage';
+import RegisterPage from './pages/auth/RegisterPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage'; // <--- NEW IMPORT
+import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import ProductListing from "./pages/ProductListing";
 import ProductDetail from "./pages/ProductDetail";
 import Cart from "./pages/Cart";
@@ -50,53 +56,70 @@ const App = () => {
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <Routes>
-            {/* Public Routes - These pages will use the PublicLayout, which includes the Footer */}
-            <Route path="/" element={<PublicLayout><Outlet /></PublicLayout>}>
-              <Route index element={<Index />} /> {/* Renders for exact path "/" */}
-              <Route path="products" element={<ProductListing />} />
-              <Route path="products/:category" element={<ProductListing />} />
-              <Route path="product/:id" element={<ProductDetail />} />
-              <Route path="cart" element={<Cart />} />
-              <Route path="wishlist" element={<Wishlist />} />
-              <Route path="checkout" element={<Checkout />} />
-              <Route path="orders" element={<Orders />} />
-              <Route path="order-confirmation" element={<OrderConfirmation />} />
-              <Route path="profile" element={<Profile />} />
-              <Route path="live-chat" element={<LiveChat />} />
-              <Route path="support" element={<Support />} />
-              {/* Public 404 - Catches any unmatched paths within the public layout */}
-              <Route path="*" element={<NotFound />} />
-            </Route>
+          {/* Wrap your entire application (or at least the public-facing part) with AuthProvider */}
+          {/* This ensures that all components rendered within it can access authentication state */}
+          <AuthProvider>
+            <Routes>
+              {/* Public Routes - These pages will use the PublicLayout, which includes the Footer */}
+              {/* Routes inside PublicLayout that don't need authentication */}
+              <Route path="/" element={<PublicLayout><Outlet /></PublicLayout>}>
+                <Route index element={<Index />} />
+                <Route path="products" element={<ProductListing />} />
+                <Route path="products/:category" element={<ProductListing />} />
+                <Route path="product/:id" element={<ProductDetail />} />
+                <Route path="live-chat" element={<LiveChat />} />
+                <Route path="support" element={<Support />} />
+                <Route path="login" element={<LoginPage />} />
+                <Route path="register" element={<RegisterPage />} />
 
-            {/* Admin Login Route - This typically does NOT use any specific layout */}
-            <Route path="/admin" element={<AdminLogin />} />
+                  {/* --- New Forgot/Reset Password Routes --- */}
+                  <Route path="forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="reset-password" element={<ResetPasswordPage />} />
 
-            {/* --- Admin Routes using AdminLayout --- */}
-            {/* All routes nested inside this will render within the AdminLayout. */}
-            <Route path="/admin" element={<AdminLayout><Outlet /></AdminLayout>}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="order-confirmation" element={<OrderConfirmation />} />
 
-              <Route path="users" element={<AdminUsers />} />
-              <Route path="categories" element={<AdminCategories />} />
-              <Route path="products" element={<AdminProducts />} />
-              <Route path="orders" element={<AdminOrders />} />
-              <Route path="coupons" element={<AdminCoupons />} />
-              <Route path="feedback" element={<AdminFeedback />} />
-              <Route path="returns" element={<AdminReturns />} />
+                {/* --- Protected Public Routes --- */}
+                {/* Wrap these components with ProtectedRoute. They will only render if isAuthenticated is true. */}
+                <Route path="cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
+                <Route path="wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
+                <Route path="checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                <Route path="orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+                <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
-              {/* Admin 404 - For any unmatched paths within /admin/* */}
-              {/* This is redundant if the parent PublicLayout already has a catch-all, but good for admin-specific 404s */}
-              {/* <Route path="*" element={<NotFound />} /> // Removed as the public layout's catch-all will handle it */}
-            </Route>
+                {/* Public 404 - Catches any unmatched paths within the public layout */}
+                <Route path="*" element={<NotFound />} />
+              </Route>
 
-            {/* Global 404 Route - This catches any other paths that haven't been matched
-                (e.g., if someone tries to go to /nonexistent-admin-page directly, it will hit the public 404) */}
-            {/* This route is now effectively covered by the PublicLayout's catch-all, but keeping it here
-                as a fallback for any routes that might not be under a specific layout. */}
-            {/* <Route path="*" element={<NotFound />} /> // This can be removed if the PublicLayout's catch-all is sufficient */}
-          </Routes>
+              {/* Admin Login Route - This typically does NOT use any specific layout */}
+              {/* This route should ideally be separate from the public layout */}
+              <Route path="/admin" element={<AdminLogin />} />
+
+              {/* --- Admin Routes using AdminLayout --- */}
+              {/* All routes nested inside this will render within the AdminLayout. */}
+              {/* You might want a separate AdminAuthContext and AdminProtectedRoute for admin security */}
+              <Route path="/admin" element={<AdminLayout><Outlet /></AdminLayout>}>
+                <Route index element={<AdminDashboard />} /> {/* /admin */}
+                <Route path="dashboard" element={<AdminDashboard />} />
+
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="categories" element={<AdminCategories />} />
+                <Route path="products" element={<AdminProducts />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="coupons" element={<AdminCoupons />} />
+                <Route path="feedback" element={<AdminFeedback />} />
+                <Route path="returns" element={<AdminReturns />} />
+
+                {/* Admin 404 - For any unmatched paths within /admin/* */}
+                {/* This is still useful for admin-specific 404 behavior/UI */}
+                <Route path="*" element={<NotFound />} /> {/* You might create a specific AdminNotFound */}
+              </Route>
+
+              {/* Optional: A global catch-all for routes not handled by any specific layout */}
+              {/* If you have a top-level PublicLayout catch-all, this might be redundant for public paths,
+                  but could catch direct attempts to /admin/nonexistent-path if not caught by AdminLayout's catch-all. */}
+              {/* <Route path="*" element={<NotFound />} /> */}
+            </Routes>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

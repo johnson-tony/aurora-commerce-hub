@@ -4,13 +4,19 @@ const cors = require("cors");
 const path = require("path");
 const multer = require("multer");
 const fs = require("fs");
+const bcrypt = require("bcryptjs"); // <--- ADD THIS LINE
+const jwt = require("jsonwebtoken");
 
 // --- Import your specialized routers ---
 const adminCategoryRoutes = require("./routes/adminCategoryRoutes");
 const publicCategoryRoutes = require("./routes/publicCategoryRoutes");
 const adminProductRoutes = require("./routes/adminProductRoutes");
 const publicProductRoutes = require("./routes/publicProductRoutes");
-const adminSubcategoryRoutes = require("./routes/adminSubcategoryRoutes"); // Import the new subcategory router
+const adminSubcategoryRoutes = require("./routes/adminSubcategoryRoutes");
+const authRoutes = require("./routes/authRoutes");
+const checkoutRoutes = require("./routes/checkoutRoutes");
+
+// Import the new subcategory router
 
 const app = express();
 const PORT = 5000;
@@ -126,6 +132,55 @@ const db = new sqlite3.Database(dbPath, (err) => {
         }
       }
     );
+
+    db.run(
+      `CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        reset_token TEXT,            
+        reset_token_expires_at DATETIME  
+      )`,
+      (err) => {
+        if (err) {
+          console.error("Error creating users table:", err.message);
+        } else {
+          console.log("Users table ensured.");
+        }
+      }
+    );
+    // ... (after products table creation or similar)
+
+    // Create shipping_details table if it doesn't exist
+    db.run(
+      `CREATE TABLE IF NOT EXISTS shipping_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    address1 TEXT NOT NULL,
+    address2 TEXT,
+    city TEXT NOT NULL,
+    state TEXT NOT NULL,
+    zip TEXT NOT NULL,
+    country TEXT NOT NULL,
+    shipping_method TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )`,
+      (err) => {
+        if (err) {
+          console.error("Error creating shipping_details table:", err.message);
+        } else {
+          console.log("Shipping details table ensured.");
+        }
+      }
+    );
+
+    // ... (rest of your server.js)
   }
 });
 
@@ -161,6 +216,8 @@ app.use("/api/admin/categories", adminSubcategoryRoutes); // Subcategory routes 
 app.use("/api/categories", publicCategoryRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/products", publicProductRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/checkout", checkoutRoutes);
 
 // --- Start the server ---
 app.listen(PORT, () => {
