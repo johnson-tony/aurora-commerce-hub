@@ -19,6 +19,14 @@ export default {
     },
     extend: {
       colors: {
+        'admin-page-bg': '#F9FAFB',        // A very light, clean grey for the overall page background
+        'admin-text-primary': '#1F2937',   // A dark slate grey for primary text
+        'admin-header-bg': '#2C3B4E',      // A deep, professional blue-grey for the header
+        'admin-link-accent': '#3B82F6',    // A standard, vibrant blue for active links and accents
+        'admin-logo-accent': '#FBBF24',    // A bright yellow for a small logo highlight
+        'admin-border': '#E5E7EB',         // A light grey for borders
+        'admin-button-outline-text': '#DBEAFE', // Light blue for outline button text
+        'admin-button-outline-hover-bg': '#DBEAFE', // Light blue fo
         // Light, Unsplash-inspired Color Palette
         'header-light': '#FFFFFF', // Pure white for the main header background
         'search-bar-light': '#EEEEEE', // A very light grey for the search input
