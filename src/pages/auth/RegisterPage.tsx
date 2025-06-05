@@ -3,13 +3,13 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-// No need to import useAuth here, as registration just redirects to login
 
 const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [phone, setPhone] = useState(''); // NEW: State for phone number
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -26,12 +26,13 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', { // Corrected path
+      const response = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, email, password }),
+        // UPDATED: Include phone in the request body
+        body: JSON.stringify({ name, email, password, phone }),
       });
 
       const data = await response.json();
@@ -51,7 +52,6 @@ const RegisterPage: React.FC = () => {
   };
 
   return (
-    // ... (rest of your RegisterPage JSX, no changes needed here)
     <div className="flex items-center justify-center min-h-[calc(100vh-64px)] bg-header-light">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md border border-border-light">
         <h2 className="text-2xl font-bold text-center text-text-dark">Register</h2>
@@ -84,6 +84,22 @@ const RegisterPage: React.FC = () => {
               className="bg-search-bar-light text-text-dark border-border-light focus:ring-accent-blue"
             />
           </div>
+          {/* NEW: Phone Number Input */}
+          <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-text-dark mb-1">
+              Phone Number
+            </label>
+            <Input
+              type="tel" // Use type="tel" for phone numbers
+              id="phone"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+91 98765 43210"
+              // `required` attribute removed as per your table schema allowing NULL
+              className="bg-search-bar-light text-text-dark border-border-light focus:ring-accent-blue"
+            />
+          </div>
+          {/* END NEW */}
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-text-dark mb-1">
               Password
