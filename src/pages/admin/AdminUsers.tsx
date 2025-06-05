@@ -7,11 +7,12 @@ import UserManagementHeader from "@/components/admincontroluser/UserManagementHe
 import UserSearchBar from "@/components/admincontroluser/UserSearchBar";
 import UserTable from "@/components/admincontroluser/UserTable";
 import UserDetailPanel from "@/components/admincontroluser/UserDetailPanel";
+import AddUserForm from "@/components/admincontroluser/AddUserForm"; // Import the new form component
 
 // Import shared types and utility functions
 import { User, getActiveStatusColor } from "@/types/user";
 
-import { Card } from "@/components/ui/card";
+import { Card } from "@/components/ui/card"; // Still useful for other parts, keep
 
 // Re-declare UserFormInputs type as it's used in onUpdateUser (or import if moved)
 type UserFormInputs = {
@@ -20,14 +21,21 @@ type UserFormInputs = {
   isActive: boolean;
 };
 
+// Define the type for AddUserForm inputs (should match AddUserForm.tsx's schema)
+type AddUserFormInputs = {
+  name: string;
+  email: string;
+  isActive: boolean;
+};
+
 // Define your API base URL
-const API_BASE_URL = "http://localhost:5000/api"; //
+const API_BASE_URL = "http://localhost:5000/api";
 
 // --- AdminUsers Component ---
 const AdminUsers = () => {
-  const [users, setUsers] = useState<User[]>([]); // Initialize with an empty array
-  const [loading, setLoading] = useState(true); // New loading state
-  const [error, setError] = useState<string | null>(null); // New error state
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("registeredDate");
@@ -37,26 +45,28 @@ const AdminUsers = () => {
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
+  // New state for Add User form visibility and loading
+  const [showAddUserForm, setShowAddUserForm] = useState(false);
+  const [isAddingUser, setIsAddingUser] = useState(false); // To disable form during submission
+
   // --- Fetch Users from API on component mount ---
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         setLoading(true);
-        // Using absolute URL
-        const response = await fetch(`${API_BASE_URL}/users`); //
+        const response = await fetch(`${API_BASE_URL}/users`);
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data: User[] = await response.json();
 
-        // Map the data from the database to match your User interface
         const mappedUsers: User[] = data.map((dbUser: any) => ({
-          id: dbUser.id.toString(), // Ensure ID is string if your interface expects string
+          id: dbUser.id.toString(),
           name: dbUser.name,
           email: dbUser.email,
-          isActive: dbUser.status === "active", // Map 'status' to 'isActive'
-          registeredDate: dbUser.created_at, // Map 'created_at' to 'registeredDate'
-          lastLogin: dbUser.last_login || undefined, // Map 'last_login' to 'lastLogin', handle null/undefined
+          isActive: dbUser.status === "active",
+          registeredDate: dbUser.created_at,
+          lastLogin: dbUser.last_login || undefined,
         }));
         setUsers(mappedUsers);
       } catch (e: any) {
@@ -68,7 +78,7 @@ const AdminUsers = () => {
     };
 
     fetchUsers();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
   // Memoized filtered and sorted users for performance
   const filteredAndSortedUsers = useMemo(() => {
@@ -127,9 +137,7 @@ const AdminUsers = () => {
       )
     ) {
       try {
-        // Use absolute URL
         const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-          //
           method: "DELETE",
         });
 
@@ -151,16 +159,13 @@ const AdminUsers = () => {
 
   const handleUpdateUser = async (userId: string, data: UserFormInputs) => {
     try {
-      // Prepare data for the backend, mapping isActive back to status
       const dataToSend = {
         name: data.name,
         email: data.email,
-        status: data.isActive ? "active" : "inactive", // Map isActive back to status
+        status: data.isActive ? "active" : "inactive",
       };
 
-      // Use absolute URL
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-        //
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -174,15 +179,13 @@ const AdminUsers = () => {
 
       // If update is successful, update the local state with the new data
       setUsers((prevUsers) =>
-        prevUsers.map(
-          (u) =>
-            u.id === userId
-              ? { ...u, ...data, lastLogin: new Date().toISOString() }
-              : u // Update lastLogin for demonstration
+        prevUsers.map((u) =>
+          u.id === userId
+            ? { ...u, ...data, lastLogin: new Date().toISOString() }
+            : u
         )
       );
 
-      // Important: Update selectedUser so UserDetailPanel reflects the changes immediately
       if (selectedUser && selectedUser.id === userId) {
         setSelectedUser((prevSelectedUser) =>
           prevSelectedUser ? { ...prevSelectedUser, ...data } : null
@@ -202,14 +205,12 @@ const AdminUsers = () => {
     const newStatus = userToToggle.isActive ? "inactive" : "active";
 
     try {
-      // Use absolute URL
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
-        //
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ status: newStatus }), // Only send the status to update
+        body: JSON.stringify({ status: newStatus }),
       });
 
       if (!response.ok) {
@@ -233,14 +234,112 @@ const AdminUsers = () => {
     }
   };
 
+  // Function to handle adding a new user
+  const handleAddNewUser = async (newUserData: AddUserFormInputs) => {
+    setIsAddingUser(true); // Set loading state
+    try {
+      const dataToSend = {
+        name: newUserData.name,
+        email: newUserData.email,
+        status: newUserData.isActive ? "active" : "inactive",
+      };
+
+      const response = await fetch(`${API_BASE_URL}/users`, {
+        // POST to /api/users
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          `Failed to add user: ${response.statusText} - ${
+            errorData.message || ""
+          }`
+        );
+      }
+
+      const addedUserResponse = await response.json();
+      const addedUser: User = {
+        id: addedUserResponse.user.id.toString(), // Ensure ID is string
+        name: addedUserResponse.user.name,
+        email: addedUserResponse.user.email,
+        isActive: addedUserResponse.user.status === "active",
+        registeredDate: addedUserResponse.user.created_at,
+        lastLogin: addedUserResponse.user.last_login || undefined,
+      };
+
+      setUsers((prevUsers) => [...prevUsers, addedUser]); // Add new user to state
+      setShowAddUserForm(false); // Close the form
+      alert("User added successfully!");
+      console.log("New user added:", addedUser);
+    } catch (e: any) {
+      console.error("Error adding new user:", e);
+      alert(`Error adding new user: ${e.message}`);
+    } finally {
+      setIsAddingUser(false); // Reset loading state
+    }
+  };
+
   const handleAddUser = () => {
-    alert("Add User functionality will be implemented here!");
-    // In a real app, this would typically open a form for adding a new user
+    setShowAddUserForm(true); // Open the Add User form
+    // Close other panels if open
+    setIsViewingDetails(false);
+    setSelectedUser(null);
+    setIsEditingDetails(false);
   };
 
   const handleExportUsers = () => {
-    alert("Export Users functionality will be implemented here!");
-    // In a real app, this might trigger a backend process to generate a CSV
+    if (filteredAndSortedUsers.length === 0) {
+      alert("No users to export.");
+      return;
+    }
+
+    const headers = [
+      "ID",
+      "Name",
+      "Email",
+      "Active Status",
+      "Registered Date",
+      "Last Login",
+    ];
+
+    const csvRows = filteredAndSortedUsers.map((user) => [
+      user.id,
+      user.name,
+      user.email,
+      user.isActive ? "Active" : "Inactive",
+      new Date(user.registeredDate).toLocaleDateString(),
+      user.lastLogin ? new Date(user.lastLogin).toLocaleString() : "N/A",
+    ]);
+
+    const csvContent =
+      headers.join(",") +
+      "\n" +
+      csvRows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", "users_export.csv");
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } else {
+      alert(
+        "Your browser does not support the download attribute. Please copy the data manually."
+      );
+      window.open(
+        "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent)
+      );
+    }
   };
 
   if (loading) {
@@ -263,12 +362,12 @@ const AdminUsers = () => {
     <div className="min-h-screen bg-soft-ivory font-poppins text-charcoal-gray relative">
       <div
         className={`max-w-7xl mx-auto px-4 py-8 ${
-          isViewingDetails ? "pr-md-80" : ""
+          isViewingDetails || showAddUserForm ? "pr-md-80" : "" // Adjust padding if any modal is open
         }`}
       >
         {/* Page Header */}
         <UserManagementHeader
-          onAddUser={handleAddUser}
+          onAddUser={handleAddUser} // This now toggles the form
           onExportUsers={handleExportUsers}
         />
 
@@ -287,7 +386,7 @@ const AdminUsers = () => {
           onViewUserClick={handleViewUserClick}
           onDeleteUser={handleDeleteUser}
           onToggleActiveStatus={handleToggleActiveStatus}
-          getActiveStatusColor={getActiveStatusColor} // Pass utility functions
+          getActiveStatusColor={getActiveStatusColor}
         />
       </div>
 
@@ -300,6 +399,15 @@ const AdminUsers = () => {
         setIsEditingDetails={setIsEditingDetails}
         onUpdateUser={handleUpdateUser}
       />
+
+      {/* Add New User Form (Modal) */}
+      {showAddUserForm && (
+        <AddUserForm
+          onAddUserSubmit={handleAddNewUser}
+          onCancel={() => setShowAddUserForm(false)}
+          isLoading={isAddingUser}
+        />
+      )}
     </div>
   );
 };
