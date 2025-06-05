@@ -22,4 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.db
+
 backend/admin/ecommerce_admin.db
