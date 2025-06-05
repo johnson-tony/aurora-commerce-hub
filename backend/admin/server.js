@@ -2,14 +2,15 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const cors = require("cors");
 const path = require("path");
-const multer = require("multer"); // <--- ADD THIS LINE
-const fs = require("fs"); // <--- ADD THIS LINE to ensure directory exists
+const multer = require("multer");
+const fs = require("fs");
 
 // --- Import your specialized routers ---
 const adminCategoryRoutes = require("./routes/adminCategoryRoutes");
 const publicCategoryRoutes = require("./routes/publicCategoryRoutes");
 const adminProductRoutes = require("./routes/adminProductRoutes");
 const publicProductRoutes = require("./routes/publicProductRoutes");
+const adminSubcategoryRoutes = require("./routes/adminSubcategoryRoutes"); // Import the new subcategory router
 
 const app = express();
 const PORT = 5000;
@@ -84,6 +85,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
       }
     );
 
+    // Create subcategories table if it doesn't exist
+    db.run(
+      `CREATE TABLE IF NOT EXISTS subcategories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        image TEXT,
+        display_order INTEGER,
+        parent_id INTEGER NOT NULL,
+        FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE CASCADE
+      )`,
+      (err) => {
+        if (err) {
+          console.error("Error creating subcategories table:", err.message);
+        } else {
+          console.log("Subcategories table ensured.");
+        }
+      }
+    );
+
     // Create products table if it doesn't exist
     db.run(
       `CREATE TABLE IF NOT EXISTS products (
@@ -96,7 +116,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         category TEXT NOT NULL,
         available INTEGER DEFAULT 1, -- SQLite uses 0 for false, 1 for true
         images TEXT -- Store as a JSON string of image URLs
-      )`,
+      )
+      `,
       (err) => {
         if (err) {
           console.error("Error creating products table:", err.message);
@@ -109,6 +130,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 // IMPORTANT: Helper functions for database queries.
+// These are attached to app.locals so they can be accessed by routers.
 app.locals.dbRun = (query, params = []) => {
   return new Promise((resolve, reject) => {
     db.run(query, params, function (err) {
@@ -135,6 +157,7 @@ app.locals.dbAll = (query, params = []) => {
 
 // --- Mount your routers (assign base paths to the "chefs") ---
 app.use("/api/admin/categories", adminCategoryRoutes);
+app.use("/api/admin/categories", adminSubcategoryRoutes); // Subcategory routes are nested under /api/admin/categories
 app.use("/api/categories", publicCategoryRoutes);
 app.use("/api/admin/products", adminProductRoutes);
 app.use("/api/products", publicProductRoutes);
