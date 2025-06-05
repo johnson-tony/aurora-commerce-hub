@@ -4,23 +4,16 @@ import { Eye, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-// Re-declare User interface or import it from a shared types file
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "customer";
-  isActive: boolean;
-  registeredDate: string;
-  lastLogin?: string;
-}
+// Import the updated User interface from the shared types file
+import { User, getActiveStatusColor } from "@/types/user";
 
 interface UserCardProps {
   user: User;
   onViewDetails: (user: User) => void;
   onDeleteUser: (userId: string) => void;
   onToggleActiveStatus: (userId: string) => void;
-  getRoleColor: (role: User["role"]) => string; // Pass these utility functions as props
+  // Removed getRoleColor as role is no longer part of the User interface
+  // getRoleColor: (role: User["role"]) => string;
   getActiveStatusColor: (isActive: boolean) => string;
 }
 
@@ -29,7 +22,7 @@ const UserCard: React.FC<UserCardProps> = ({
   onViewDetails,
   onDeleteUser,
   onToggleActiveStatus,
-  getRoleColor,
+  // Removed getRoleColor from destructuring
   getActiveStatusColor,
 }) => {
   return (
@@ -43,11 +36,14 @@ const UserCard: React.FC<UserCardProps> = ({
         </div>
         <div className="text-sm text-gray-500">{user.email}</div>
       </td>
+      {/* Removed the table data cell for role */}
+      {/*
       <td className="px-6 py-4 whitespace-nowrap">
         <Badge className={getRoleColor(user.role)}>
           {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
         </Badge>
       </td>
+      */}
       <td className="px-6 py-4 whitespace-nowrap">
         <Button
           variant="outline"

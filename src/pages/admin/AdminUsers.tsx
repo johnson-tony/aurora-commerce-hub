@@ -1,7 +1,6 @@
 // src/pages/AdminUsers.tsx
 import React, { useState, useMemo, useEffect } from "react";
-// No need for Link, Eye, Trash2, Download, UserPlus here anymore as they are in child components
-import { Search, ArrowUpDown } from "lucide-react"; // Keep Search and ArrowUpDown if you want them in this file for overall logic
+import { Search, ArrowUpDown } from "lucide-react";
 
 // Import the new components
 import UserManagementHeader from "@/components/admincontroluser/UserManagementHeader";
@@ -10,78 +9,66 @@ import UserTable from "@/components/admincontroluser/UserTable";
 import UserDetailPanel from "@/components/admincontroluser/UserDetailPanel";
 
 // Import shared types and utility functions
-import { User, getRoleColor, getActiveStatusColor } from "@/types/user";
+import { User, getActiveStatusColor } from "@/types/user";
 
-// No need for Badge, Select, Label here anymore as they are in child components
-import { Card } from "@/components/ui/card"; // Only Card might be needed if it wraps the main content
-
-// --- Mock Data for Users ---
-const DUMMY_USERS: User[] = [
-  {
-    id: "user-001",
-    name: "Alice Smith",
-    email: "alice.s@example.com",
-    role: "admin",
-    isActive: true,
-    registeredDate: "2023-01-15T10:00:00Z",
-    lastLogin: "2025-06-01T14:30:00Z",
-  },
-  {
-    id: "user-002",
-    name: "Bob Johnson",
-    email: "bob.j@example.com",
-    role: "customer",
-    isActive: true,
-    registeredDate: "2023-03-20T11:30:00Z",
-    lastLogin: "2025-05-28T09:15:00Z",
-  },
-  {
-    id: "user-003",
-    name: "Charlie Brown",
-    email: "charlie.b@example.com",
-    role: "customer",
-    isActive: false,
-    registeredDate: "2023-05-10T15:45:00Z",
-    lastLogin: "2025-04-10T10:00:00Z",
-  },
-  {
-    id: "user-004",
-    name: "Diana Prince",
-    email: "diana.p@example.com",
-    role: "customer",
-    isActive: true,
-    registeredDate: "2024-02-01T09:00:00Z",
-    lastLogin: "2025-06-02T10:00:00Z",
-  },
-  {
-    id: "user-005",
-    name: "Eve Adams",
-    email: "eve.a@example.com",
-    role: "admin",
-    isActive: true,
-    registeredDate: "2024-06-01T16:00:00Z",
-    lastLogin: "2025-06-02T11:00:00Z",
-  },
-];
+import { Card } from "@/components/ui/card";
 
 // Re-declare UserFormInputs type as it's used in onUpdateUser (or import if moved)
 type UserFormInputs = {
   name: string;
   email: string;
-  role: "admin" | "customer";
   isActive: boolean;
 };
 
+// Define your API base URL
+const API_BASE_URL = "http://localhost:5000/api"; //
+
 // --- AdminUsers Component ---
 const AdminUsers = () => {
-  const [users, setUsers] = useState<User[]>(DUMMY_USERS);
+  const [users, setUsers] = useState<User[]>([]); // Initialize with an empty array
+  const [loading, setLoading] = useState(true); // New loading state
+  const [error, setError] = useState<string | null>(null); // New error state
+
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("registeredDate");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const [isViewingDetails, setIsViewingDetails] = useState(false);
-  const [isEditingDetails, setIsEditingDetails] = useState(false); // Managed by UserDetailPanel now, but parent controls visibility
+  const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  // --- Fetch Users from API on component mount ---
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        // Using absolute URL
+        const response = await fetch(`${API_BASE_URL}/users`); //
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data: User[] = await response.json();
+
+        // Map the data from the database to match your User interface
+        const mappedUsers: User[] = data.map((dbUser: any) => ({
+          id: dbUser.id.toString(), // Ensure ID is string if your interface expects string
+          name: dbUser.name,
+          email: dbUser.email,
+          isActive: dbUser.status === "active", // Map 'status' to 'isActive'
+          registeredDate: dbUser.created_at, // Map 'created_at' to 'registeredDate'
+          lastLogin: dbUser.last_login || undefined, // Map 'last_login' to 'lastLogin', handle null/undefined
+        }));
+        setUsers(mappedUsers);
+      } catch (e: any) {
+        setError(e.message || "Failed to fetch users.");
+        console.error("Failed to fetch users:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUsers();
+  }, []); // Empty dependency array means this runs once on mount
 
   // Memoized filtered and sorted users for performance
   const filteredAndSortedUsers = useMemo(() => {
@@ -91,8 +78,7 @@ const AdminUsers = () => {
       currentUsers = currentUsers.filter(
         (user) =>
           user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.role.toLowerCase().includes(searchTerm.toLowerCase())
+          user.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -134,53 +120,144 @@ const AdminUsers = () => {
     setIsEditingDetails(false);
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     if (
       window.confirm(
         `Are you sure you want to delete user ${userId}? This action cannot be undone.`
       )
     ) {
-      setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
-      console.log(`Dummy Delete: User with ID ${userId} deleted.`);
-      if (selectedUser && selectedUser.id === userId) {
-        handleCloseDetails();
+      try {
+        // Use absolute URL
+        const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+          //
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to delete user: ${response.statusText}`);
+        }
+
+        setUsers((prevUsers) => prevUsers.filter((user) => user.id !== userId));
+        console.log(`User with ID ${userId} deleted successfully.`);
+        if (selectedUser && selectedUser.id === userId) {
+          handleCloseDetails();
+        }
+      } catch (e: any) {
+        console.error("Error deleting user:", e);
+        alert(`Error deleting user: ${e.message}`);
       }
     }
   };
 
-  const handleUpdateUser = (userId: string, data: UserFormInputs) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((u) => (u.id === userId ? { ...u, ...data } : u))
-    );
-    // Important: Update selectedUser so UserDetailPanel reflects the changes immediately
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser((prevSelectedUser) =>
-        prevSelectedUser ? { ...prevSelectedUser, ...data } : null
+  const handleUpdateUser = async (userId: string, data: UserFormInputs) => {
+    try {
+      // Prepare data for the backend, mapping isActive back to status
+      const dataToSend = {
+        name: data.name,
+        email: data.email,
+        status: data.isActive ? "active" : "inactive", // Map isActive back to status
+      };
+
+      // Use absolute URL
+      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+        //
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dataToSend),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to update user: ${response.statusText}`);
+      }
+
+      // If update is successful, update the local state with the new data
+      setUsers((prevUsers) =>
+        prevUsers.map(
+          (u) =>
+            u.id === userId
+              ? { ...u, ...data, lastLogin: new Date().toISOString() }
+              : u // Update lastLogin for demonstration
+        )
       );
+
+      // Important: Update selectedUser so UserDetailPanel reflects the changes immediately
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prevSelectedUser) =>
+          prevSelectedUser ? { ...prevSelectedUser, ...data } : null
+        );
+      }
+      console.log("User updated successfully:", { userId, ...data });
+    } catch (e: any) {
+      console.error("Error updating user:", e);
+      alert(`Error updating user: ${e.message}`);
     }
-    console.log("Dummy Update User:", { userId, ...data });
   };
 
-  const handleToggleActiveStatus = (userId: string) => {
-    setUsers((prevUsers) =>
-      prevUsers.map((user) =>
-        user.id === userId ? { ...user, isActive: !user.isActive } : user
-      )
-    );
-    if (selectedUser && selectedUser.id === userId) {
-      setSelectedUser((prev) =>
-        prev ? { ...prev, isActive: !prev.isActive } : null
+  const handleToggleActiveStatus = async (userId: string) => {
+    const userToToggle = users.find((user) => user.id === userId);
+    if (!userToToggle) return;
+
+    const newStatus = userToToggle.isActive ? "inactive" : "active";
+
+    try {
+      // Use absolute URL
+      const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+        //
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: newStatus }), // Only send the status to update
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to toggle user status: ${response.statusText}`);
+      }
+
+      setUsers((prevUsers) =>
+        prevUsers.map((user) =>
+          user.id === userId ? { ...user, isActive: !user.isActive } : user
+        )
       );
+      if (selectedUser && selectedUser.id === userId) {
+        setSelectedUser((prev) =>
+          prev ? { ...prev, isActive: !prev.isActive } : null
+        );
+      }
+      console.log(`User ${userId} status toggled to ${newStatus}.`);
+    } catch (e: any) {
+      console.error("Error toggling user status:", e);
+      alert(`Error toggling user status: ${e.message}`);
     }
   };
 
   const handleAddUser = () => {
     alert("Add User functionality will be implemented here!");
+    // In a real app, this would typically open a form for adding a new user
   };
 
   const handleExportUsers = () => {
     alert("Export Users functionality will be implemented here!");
+    // In a real app, this might trigger a backend process to generate a CSV
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-soft-ivory font-poppins text-charcoal-gray flex items-center justify-center">
+        Loading users...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-soft-ivory font-poppins text-red-600 flex items-center justify-center">
+        Error: {error}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-soft-ivory font-poppins text-charcoal-gray relative">
@@ -210,7 +287,6 @@ const AdminUsers = () => {
           onViewUserClick={handleViewUserClick}
           onDeleteUser={handleDeleteUser}
           onToggleActiveStatus={handleToggleActiveStatus}
-          getRoleColor={getRoleColor} // Pass utility functions
           getActiveStatusColor={getActiveStatusColor} // Pass utility functions
         />
       </div>

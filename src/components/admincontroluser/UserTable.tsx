@@ -4,16 +4,8 @@ import { ArrowUpDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import UserCard from "./UserCard"; // Import the UserCard component
 
-// Re-declare User interface or import it from a shared types file
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "customer";
-  isActive: boolean;
-  registeredDate: string;
-  lastLogin?: string;
-}
+// Import the updated User interface and relevant utility functions
+import { User, getActiveStatusColor } from "@/types/user";
 
 interface UserTableProps {
   users: User[];
@@ -23,7 +15,8 @@ interface UserTableProps {
   onViewUserClick: (user: User) => void;
   onDeleteUser: (userId: string) => void;
   onToggleActiveStatus: (userId: string) => void;
-  getRoleColor: (role: User["role"]) => string;
+  // Removed getRoleColor from props as 'role' is no longer part of User
+  // getRoleColor: (role: User["role"]) => string;
   getActiveStatusColor: (isActive: boolean) => string;
 }
 
@@ -35,7 +28,7 @@ const UserTable: React.FC<UserTableProps> = ({
   onViewUserClick,
   onDeleteUser,
   onToggleActiveStatus,
-  getRoleColor,
+  // Removed getRoleColor from destructuring
   getActiveStatusColor,
 }) => {
   const getSortIndicator = (column: string) => {
@@ -65,9 +58,12 @@ const UserTable: React.FC<UserTableProps> = ({
                 >
                   Name {getSortIndicator("name")}
                 </th>
+                {/* Removed Role header column */}
+                {/*
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Role
                 </th>
+                */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
                 </th>
@@ -90,7 +86,7 @@ const UserTable: React.FC<UserTableProps> = ({
                   onViewDetails={onViewUserClick}
                   onDeleteUser={onDeleteUser}
                   onToggleActiveStatus={onToggleActiveStatus}
-                  getRoleColor={getRoleColor}
+                  // Removed getRoleColor from props passed to UserCard
                   getActiveStatusColor={getActiveStatusColor}
                 />
               ))}
