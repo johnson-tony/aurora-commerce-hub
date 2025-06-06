@@ -1,9 +1,57 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import Navigation from "@/components/Navigation"; // Assuming this is your navigation component
-import { io, Socket } from "socket.io-client";
+// D:\aurora-commerce-hub\src\pages\LiveChat.tsx (assuming LiveChat is in src/pages/)
 
-// Helper function to format timestamp
-const formatTime = (date: Date) => {
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import Navigation from "@/components/Navigation";
+import { io, Socket } from "socket.io-client";
+import { useAuth } from "../context/AuthContext"; // Path should be relative from src/pages/ to src/context/
+
+// --- Helper Functions ---
+
+// Helper function to parse 'YYYY-MM-DD HH:MM:SS' into a Date object
+const parseDateTimeString = (dtString: string): Date | null => {
+  if (!dtString || typeof dtString !== "string") {
+    return null; // Handle null, undefined, or non-string inputs
+  }
+
+  // Split the string into date and time parts
+  const [datePart, timePart] = dtString.split(" ");
+
+  // Handle potential timezone offset in the string if present (though not in your backend example)
+  // For 'YYYY-MM-DD HH:MM:SS', we manually parse for reliability.
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hours, minutes, seconds] = timePart.split(":").map(Number);
+
+  // JavaScript Date constructor month is 0-indexed (January is 0, December is 11)
+  // Ensure all parts are valid numbers before creating Date
+  if (
+    !isNaN(year) &&
+    !isNaN(month) &&
+    !isNaN(day) &&
+    !isNaN(hours) &&
+    !isNaN(minutes) &&
+    !isNaN(seconds)
+  ) {
+    // Note: Creating a Date object this way implicitly uses the local timezone
+    return new Date(year, month - 1, day, hours, minutes, seconds);
+  } else {
+    // Fallback for direct ISO parsing if the format changes or if the string is already ISO
+    const isoDate = new Date(dtString);
+    if (!isNaN(isoDate.getTime())) {
+      return isoDate;
+    }
+
+    console.warn("Could not parse date string:", dtString);
+    return null; // Return null if parsing fails
+  }
+};
+
+// Helper function to format a Date object into "HH:MM"
+const formatTime = (date: Date | null): string => {
+  // Accepts Date or null
+  if (!date || isNaN(date.getTime())) {
+    // Check if date is valid before formatting
+    return "N/A"; // Or an empty string, or 'Invalid Time'
+  }
   const hours = date.getHours().toString().padStart(2, "0");
   const minutes = date.getMinutes().toString().padStart(2, "0");
   return `${hours}:${minutes}`;
@@ -14,68 +62,26 @@ interface ChatMessage {
   id: number | string;
   text: string;
   sender: "user" | "agent";
-  timestamp: string;
+  timestamp: string; // This will now store the formatted string
   read?: boolean;
 }
 
-// Assume you have a User type, perhaps from your auth context
-interface CurrentUser {
+// User type from AuthContext
+// This interface should ideally be imported from AuthContext.tsx or a shared types file.
+// For now, let's keep it here for clarity if you don't have it defined in AuthContext.
+// Based on your AuthContext: user: { id: number; name: string; email: string } | null;
+interface AuthUser {
+  // Renamed from CurrentUser to avoid conflict with AuthContext's user property
   id: number; // MUST be integer to match backend users.id
   name: string;
   email: string;
-  phone?: string; // Optional phone number
+  // phone?: string | null; // AuthContext's user doesn't have phone, adjust if your backend provides it
 }
 
 const LiveChat: React.FC = () => {
-  // --- User State ---
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true); // New loading state for user data
-
-  useEffect(() => {
-    // This now simulates fetching user data from an API
-    const fetchUserData = async () => {
-      try {
-        console.log("Attempting to fetch user data...");
-        const response = await fetch("http://localhost:5000/api/users");
-        console.log("Response status:", response.status);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("HTTP Error:", response.status, errorText);
-          throw new Error(
-            `HTTP error! status: ${response.status} - ${errorText}`
-          );
-        }
-
-        const usersData = await response.json(); // Renamed to usersData as it's an array
-        console.log("Fetched users data:", usersData);
-
-        // Assuming you want the first user from the array as the current user
-        if (usersData && usersData.length > 0) {
-          const firstUser = usersData[0]; // Or find by a specific ID if you have one
-          setCurrentUser({
-            id: firstUser.id,
-            name: firstUser.name,
-            email: firstUser.email,
-            phone: firstUser.phone || null,
-          });
-          console.log("currentUser state set:", firstUser);
-        } else {
-          console.warn("No user data found in the response from /api/users.");
-          setCurrentUser(null);
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-        setCurrentUser(null);
-        alert("Failed to fetch user data. Please try again.");
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-    fetchUserData();
-  }, []); // Empty dependency array means this runs once on component mount
-
-  // ... rest of your LiveChat component remains the same .../ Empty dependency array means this runs once on component mount
+  // --- User State (now from AuthContext) ---
+  const { user, loadingAuth, isAuthenticated } = useAuth(); // <--- KEY CHANGE: Destructure 'user'
+  // Use 'user' instead of 'currentUser' throughout this component.
 
   // --- TOP-LEVEL HOOK CALLS ---
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -98,70 +104,85 @@ const LiveChat: React.FC = () => {
   }, [messages]);
 
   // Handle incoming messages - use useCallback with correct dependencies
-const handleIncomingMessage = useCallback(
-  (data: any) => {
-    console.log("Raw timestamp for incoming message:", data.timestamp); // <-- ADD THIS LINE
+  const handleIncomingMessage = useCallback(
+    (data: any) => {
+      console.log("Raw timestamp for incoming message:", data.timestamp);
 
-    setMessages((prev) => {
-      const newId = data.id ? data.id.toString() : Date.now().toString();
+      setMessages((prev) => {
+        const newId = data.id ? data.id.toString() : Date.now().toString();
 
-      // IMPORTANT: Add a check for valid date before formatting
-      let formattedTimestamp = 'N/A'; // Default value if date is invalid
-      const dateObject = new Date(data.timestamp);
-      if (!isNaN(dateObject.getTime())) { // Check if the date object is valid
-        formattedTimestamp = formatTime(dateObject);
-      } else {
-        console.warn("Invalid timestamp received for incoming message:", data.timestamp);
-      }
+        let formattedTimestamp: string = "N/A"; // Default value
+        const dateObject = parseDateTimeString(data.timestamp); // Use the robust parser
 
-      return [
-        ...prev,
-        {
-          id: newId,
-          text: data.content,
-          sender: data.sender === "customer" ? "user" : "agent",
-          timestamp: formattedTimestamp, // Use the checked and formatted timestamp
-          read: data.read_by_customer,
-        },
-      ];
-    });
+        if (dateObject) {
+          // Check if parseDateTimeString returned a valid Date object
+          formattedTimestamp = formatTime(dateObject);
+        } else {
+          console.warn(
+            "Failed to parse incoming message timestamp:",
+            data.timestamp
+          );
+        }
 
-    const currentConvId = conversationIdRef.current;
-    if (
-      data.sender === "admin" &&
-      currentConvId &&
-      socketRef.current &&
-      socketRef.current.connected
-    ) {
-      socketRef.current.emit("mark_messages_read", {
-        conversationId: currentConvId,
-        readerType: "customer",
-        messageIds: [data.id],
+        return [
+          ...prev,
+          {
+            id: newId,
+            text: data.content,
+            sender: data.sender === "customer" ? "user" : "agent",
+            timestamp: formattedTimestamp, // Use the checked and formatted timestamp
+            read: data.read_by_customer,
+          },
+        ];
       });
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === data.id ? { ...msg, read: true } : msg))
-      );
-    }
-  },
-  [] // Empty dependency array.
-);
 
-  // Main useEffect for Socket.IO connection and event handling
+      const currentConvId = conversationIdRef.current;
+      if (
+        data.sender === "admin" &&
+        currentConvId &&
+        socketRef.current &&
+        socketRef.current.connected
+      ) {
+        socketRef.current.emit("mark_messages_read", {
+          conversationId: currentConvId,
+          readerType: "customer",
+          messageIds: [data.id],
+        });
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === data.id ? { ...msg, read: true } : msg))
+        );
+      }
+    },
+    [] // Empty dependency array.
+  );
+
   // Main useEffect for Socket.IO connection and event handling
   useEffect(() => {
     console.log("Socket useEffect running or re-running...");
 
     // Condition to prevent unnecessary socket connections:
-    // 1. If currentUser is not yet loaded, wait.
+    // 1. If user is not yet loaded or is null, wait.
     // 2. If chat is already initialized AND a socket connection already exists and is active, do nothing.
-    if (!currentUser) {
-      console.log("Waiting for user data to connect socket...");
+    if (loadingAuth || !user) {
+      // <--- KEY CHANGE: Use 'user' instead of 'currentUser'
+      console.log(
+        "Waiting for user data to connect socket or user not logged in..."
+      );
+      // If user logs out while chat is active, disconnect socket and reset
+      if (!user && socketRef.current) {
+        // <--- Use 'user'
+        console.log("User logged out/not authenticated, disconnecting socket.");
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setMessages([]); // Clear messages on logout
+        setConversationId(null);
+        setIsChatInitialized(false);
+      }
       return;
     }
 
-    // If currentUser IS available AND chat has already been initialized,
+    // If user IS available AND chat has already been initialized,
     // we assume the socket is already set up and we don't need to re-run the setup logic.
-    // This is the key to preventing the disconnect/reconnect loop.
     if (isChatInitialized && socketRef.current?.connected) {
       console.log(
         "Chat already initialized and socket connected. Skipping full setup."
@@ -170,13 +191,13 @@ const handleIncomingMessage = useCallback(
     }
 
     // If we reach here, it means:
-    // 1. currentUser is available.
+    // 1. user is available.
     // 2. Either the chat is NOT initialized, or the socket is not connected/active.
     //    So, we proceed with initialization.
 
     console.log(
       "Proceeding to initialize chat/socket for user:",
-      currentUser.id
+      user.id // <--- Use 'user'
     );
 
     const socket = io("http://localhost:5000", {
@@ -188,17 +209,15 @@ const handleIncomingMessage = useCallback(
       console.log("Socket.IO connected:", socket.id);
 
       // Only attempt to start/rejoin chat if it hasn't been initialized yet for this user session
-      // This is important because the 'connect' event might fire on re-connection attempts too.
       if (!isChatInitialized) {
-        // Check state here inside 'connect' listener
         fetch("http://localhost:5000/api/chat/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: currentUser.id,
-            customerName: currentUser.name,
-            customerEmail: currentUser.email,
-            customerPhone: currentUser.phone || null,
+            userId: user.id, // <--- Use 'user'
+            customerName: user.name, // <--- Use 'user'
+            customerEmail: user.email, // <--- Use 'user'
+            // <--- 'user' from your AuthContext does NOT have 'phone'. Remove this line or add 'phone' to your AuthContext's user interface if your backend supports it.
           }),
         })
           .then((res) => {
@@ -230,17 +249,17 @@ const handleIncomingMessage = useCallback(
                   console.log(
                     "Raw timestamp for initial message:",
                     msg.timestamp
-                  ); // <-- ADD THIS LINE
+                  );
 
-                  // IMPORTANT: Add a check for valid date before formatting
-                  let formattedTimestamp = "N/A"; // Default value if date is invalid
-                  const dateObject = new Date(msg.timestamp);
-                  if (!isNaN(dateObject.getTime())) {
-                    // Check if the date object is valid
+                  let formattedTimestamp: string = "N/A"; // Default value
+                  const dateObject = parseDateTimeString(msg.timestamp); // Use the robust parser
+
+                  if (dateObject) {
+                    // Check if parseDateTimeString returned a valid Date object
                     formattedTimestamp = formatTime(dateObject);
                   } else {
                     console.warn(
-                      "Invalid timestamp received for initial message:",
+                      "Failed to parse initial message timestamp:",
                       msg.timestamp
                     );
                   }
@@ -374,31 +393,28 @@ const handleIncomingMessage = useCallback(
         socketRef.current.disconnect();
         socketRef.current = null; // Ensure the ref is cleared
       }
-      // Note: Do NOT set isChatInitialized to false here if you want it to remain true
-      // when the component is simply re-rendering for other reasons (e.g., input text changes).
-      // Only set to false on full chat resolution (handleEndChat, chat_status_update resolved).
     };
-    // Dependencies: currentUser is vital. handleIncomingMessage is a useCallback.
-    // conversationId is also a dependency if you want the effect to react to it
-    // directly for the `join_chat` or `mark_messages_read` emits, though current logic
-    // handles these based on state/ref inside event listeners.
-    // The key is NOT to put isChatInitialized as a dependency if its change within the effect
-    // causes unwanted re-executions. We manage it with the `if (!isChatInitialized)` guard.
-  }, [currentUser, handleIncomingMessage]); // Removed isChatInitialized from dependencies// Add isChatInitialized to dependencies
+  }, [user, handleIncomingMessage, loadingAuth]); // <--- KEY DEPENDENCY CHANGE: Use 'user'
 
   const handleSendMessage = () => {
-    if (inputText.trim() === "" || !conversationIdRef.current || !currentUser) {
+    if (inputText.trim() === "" || !conversationIdRef.current || !user) {
+      // <--- Use 'user'
       console.warn(
         "Message not sent: Input is empty, conversationId is missing, or user not loaded."
       );
       return;
     }
 
+    // For optimistic update, use current time
+    // If backend returns a different time, the incoming message event will update it.
+    const now = new Date();
+    const formattedNow = formatTime(now); // Use the robust formatTime
+
     const newMessage: ChatMessage = {
       id: Date.now(), // Temp ID for optimistic update
       text: inputText.trim(),
       sender: "user", // For frontend display
-      timestamp: new Date().toISOString(), // Use ISO string for consistency
+      timestamp: formattedNow, // Use formatted string immediately
       read: true, // User's own message, so it's "read" by them immediately
     };
 
@@ -407,8 +423,8 @@ const handleIncomingMessage = useCallback(
         conversationId: conversationIdRef.current,
         content: newMessage.text,
         sender: "customer", // Send as 'customer' to backend
-        userId: currentUser.id, // Pass actual user ID
-        customerName: currentUser.name, // Pass actual customer name
+        userId: user.id, // Pass actual user ID // <--- Use 'user'
+        customerName: user.name, // Pass actual customer name // <--- Use 'user'
       });
       setMessages((prevMessages) => [...prevMessages, newMessage]);
       setInputText("");
@@ -432,7 +448,7 @@ const handleIncomingMessage = useCallback(
       !conversationIdRef.current ||
       !socketRef.current ||
       !socketRef.current.connected ||
-      !currentUser
+      !user // <--- Use 'user'
     )
       return;
 
@@ -464,11 +480,12 @@ const handleIncomingMessage = useCallback(
 
   const handleEndChat = () => {
     if (window.confirm("Are you sure you want to end this chat?")) {
-      if (conversationIdRef.current && currentUser) {
+      if (conversationIdRef.current && user) {
+        // <--- Use 'user'
         if (socketRef.current && socketRef.current.connected) {
           socketRef.current.emit("chat_resolved_by_customer", {
             conversationId: conversationIdRef.current,
-            resolvedBy: currentUser.id, // Send actual user ID
+            resolvedBy: user.id, // Send actual user ID // <--- Use 'user'
           });
           alert("Chat ended. Thank you for contacting support!");
           setMessages([]);
@@ -484,7 +501,7 @@ const handleIncomingMessage = useCallback(
             {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ resolvedBy: currentUser.id }), // Send actual user ID
+              body: JSON.stringify({ resolvedBy: user.id }), // Send actual user ID // <--- Use 'user'
             }
           )
             .then((res) => {
@@ -507,24 +524,26 @@ const handleIncomingMessage = useCallback(
     }
   };
 
-  // Render nothing or a loading state if currentUser is null
-  if (loadingUser) {
+  // Render nothing or a loading state if user is null
+  if (loadingAuth) {
+    // <--- KEY CHANGE: Use loadingAuth from AuthContext
     return (
       <div className="min-h-screen bg-soft-ivory flex flex-col items-center justify-center">
         <Navigation />
-        <p className="text-gray-700">Loading user data...</p>
+        <p className="text-gray-700">Loading user authentication...</p>
       </div>
     );
   }
 
-  if (!currentUser && !loadingUser) {
+  if (!user) {
+    // <--- KEY CHANGE: Use 'user' from AuthContext
     return (
       <div className="min-h-screen bg-soft-ivory flex flex-col items-center justify-center">
         <Navigation />
         <p className="text-red-700">
-          Error: User data could not be loaded. Please log in.
+          You must be logged in to access the chat.
         </p>
-        {/* Optional: Add a login button here */}
+        {/* Optional: Add a login button/link here */}
       </div>
     );
   }
@@ -540,7 +559,6 @@ const handleIncomingMessage = useCallback(
               <div className="relative">
                 <img
                   src="/agent-avatar.png" // Assuming it's in your public folder
-                  // OR import it: import agentAvatar from '@/assets/agent-avatar.png'; then src={agentAvatar}
                   alt="Agent Avatar"
                   className="w-10 h-10 rounded-full border-2 border-white"
                 />
@@ -583,7 +601,8 @@ const handleIncomingMessage = useCallback(
                     <p className="text-sm">{msg.text}</p>
                   </div>
                   <span className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                    {formatTime(new Date(msg.timestamp))}{" "}
+                    {msg.timestamp}{" "}
+                    {/* Display the already formatted timestamp */}
                     {msg.sender === "user" && (
                       <span className="ml-1 text-blue-300">
                         ✓{msg.read ? "✓" : ""}
