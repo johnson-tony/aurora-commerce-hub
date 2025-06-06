@@ -1,4 +1,4 @@
-// D:\aurora-commerce-hub\src\pages\LiveChat.tsx (assuming LiveChat is in src/pages/)
+// D:\aurora-commerce-hub\src\pages\LiveChat.tsx
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Navigation from "@/components/Navigation";
@@ -7,39 +7,23 @@ import { useAuth } from "../context/AuthContext"; // Path should be relative fro
 
 // --- Helper Functions ---
 
-// Helper function to parse 'YYYY-MM-DD HH:MM:SS' into a Date object
+// Helper function to parse a date string into a Date object
+// This is now more robust for ISO 8601 strings received from backend.
 const parseDateTimeString = (dtString: string): Date | null => {
   if (!dtString || typeof dtString !== "string") {
-    return null; // Handle null, undefined, or non-string inputs
+    return null; // Handle null, undefined, or non-string inputs gracefully
   }
 
-  // Split the string into date and time parts
-  const [datePart, timePart] = dtString.split(" ");
+  // Attempt to parse using Date constructor.
+  // It natively handles ISO 8601 strings (like "2024-06-06T09:41:03.945Z")
+  // and can also handle 'YYYY-MM-DD HH:MM:SS' in most environments,
+  // though ISO is preferred for consistency.
+  const dateObject = new Date(dtString);
 
-  // Handle potential timezone offset in the string if present (though not in your backend example)
-  // For 'YYYY-MM-DD HH:MM:SS', we manually parse for reliability.
-  const [year, month, day] = datePart.split("-").map(Number);
-  const [hours, minutes, seconds] = timePart.split(":").map(Number);
-
-  // JavaScript Date constructor month is 0-indexed (January is 0, December is 11)
-  // Ensure all parts are valid numbers before creating Date
-  if (
-    !isNaN(year) &&
-    !isNaN(month) &&
-    !isNaN(day) &&
-    !isNaN(hours) &&
-    !isNaN(minutes) &&
-    !isNaN(seconds)
-  ) {
-    // Note: Creating a Date object this way implicitly uses the local timezone
-    return new Date(year, month - 1, day, hours, minutes, seconds);
+  if (!isNaN(dateObject.getTime())) {
+    return dateObject;
   } else {
-    // Fallback for direct ISO parsing if the format changes or if the string is already ISO
-    const isoDate = new Date(dtString);
-    if (!isNaN(isoDate.getTime())) {
-      return isoDate;
-    }
-
+    // If native parsing fails, log a warning
     console.warn("Could not parse date string:", dtString);
     return null; // Return null if parsing fails
   }
@@ -47,9 +31,7 @@ const parseDateTimeString = (dtString: string): Date | null => {
 
 // Helper function to format a Date object into "HH:MM"
 const formatTime = (date: Date | null): string => {
-  // Accepts Date or null
   if (!date || isNaN(date.getTime())) {
-    // Check if date is valid before formatting
     return "N/A"; // Or an empty string, or 'Invalid Time'
   }
   const hours = date.getHours().toString().padStart(2, "0");
@@ -68,20 +50,16 @@ interface ChatMessage {
 
 // User type from AuthContext
 // This interface should ideally be imported from AuthContext.tsx or a shared types file.
-// For now, let's keep it here for clarity if you don't have it defined in AuthContext.
-// Based on your AuthContext: user: { id: number; name: string; email: string } | null;
+// For now, let's keep it here, but consider moving it.
 interface AuthUser {
-  // Renamed from CurrentUser to avoid conflict with AuthContext's user property
   id: number; // MUST be integer to match backend users.id
   name: string;
   email: string;
-  // phone?: string | null; // AuthContext's user doesn't have phone, adjust if your backend provides it
+  // phone?: string | null; // Removed as requested
 }
 
 const LiveChat: React.FC = () => {
-  // --- User State (now from AuthContext) ---
-  const { user, loadingAuth, isAuthenticated } = useAuth(); // <--- KEY CHANGE: Destructure 'user'
-  // Use 'user' instead of 'currentUser' throughout this component.
+  const { user, loadingAuth, isAuthenticated } = useAuth();
 
   // --- TOP-LEVEL HOOK CALLS ---
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -90,8 +68,9 @@ const LiveChat: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  // Using a ref for conversationId to ensure `handleIncomingMessage` always has the latest without re-creating
   const conversationIdRef = useRef<string | null>(null);
-  const [isChatInitialized, setIsChatInitialized] = useState(false); // New state to prevent multiple initiations
+  const [isChatInitialized, setIsChatInitialized] = useState(false); // Prevents multiple chat initiations
 
   // This useEffect updates the ref whenever conversationId state changes
   useEffect(() => {
@@ -106,83 +85,80 @@ const LiveChat: React.FC = () => {
   // Handle incoming messages - use useCallback with correct dependencies
   const handleIncomingMessage = useCallback(
     (data: any) => {
+      console.log("RECEIVED new_message DATA (Frontend):", data); // Added for debugging
+      console.log("Sender in received data:", data.sender);
+      console.log("Content in received data:", data.content);
       console.log("Raw timestamp for incoming message:", data.timestamp);
 
       setMessages((prev) => {
         const newId = data.id ? data.id.toString() : Date.now().toString();
 
-        let formattedTimestamp: string = "N/A"; // Default value
+        let formattedTimestamp: string = "N/A";
         const dateObject = parseDateTimeString(data.timestamp); // Use the robust parser
 
         if (dateObject) {
-          // Check if parseDateTimeString returned a valid Date object
           formattedTimestamp = formatTime(dateObject);
         } else {
           console.warn(
-            "Failed to parse incoming message timestamp:",
+            "Failed to parse incoming message timestamp (after parsing attempt):",
             data.timestamp
           );
         }
 
-        return [
-          ...prev,
-          {
-            id: newId,
-            text: data.content,
-            sender: data.sender === "customer" ? "user" : "agent",
-            timestamp: formattedTimestamp, // Use the checked and formatted timestamp
-            read: data.read_by_customer,
-          },
-        ];
-      });
+        const newMessage: ChatMessage = {
+          id: newId,
+          text: data.content,
+          sender: data.sender === "customer" ? "user" : "agent",
+          timestamp: formattedTimestamp,
+          read: data.read_by_customer, // Use the read_by_customer status directly
+        };
 
-      const currentConvId = conversationIdRef.current;
-      if (
-        data.sender === "admin" &&
-        currentConvId &&
-        socketRef.current &&
-        socketRef.current.connected
-      ) {
-        socketRef.current.emit("mark_messages_read", {
-          conversationId: currentConvId,
-          readerType: "customer",
-          messageIds: [data.id],
-        });
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === data.id ? { ...msg, read: true } : msg))
-        );
-      }
+        // If the incoming message is from the agent and we are on the customer side,
+        // mark it as read by the customer immediately and emit to backend.
+        // This is done here to ensure the UI updates reflect the read status immediately.
+        if (
+          newMessage.sender === "agent" &&
+          conversationIdRef.current &&
+          socketRef.current?.connected
+        ) {
+          socketRef.current.emit("mark_messages_read", {
+            conversationId: conversationIdRef.current,
+            readerType: "customer",
+            messageIds: [Number(newMessage.id)], // Ensure ID is number for backend
+          });
+          // Optimistically mark as read in UI
+          newMessage.read = true; // Mark as read by customer
+        }
+
+        return [...prev, newMessage];
+      });
     },
-    [] // Empty dependency array.
+    [] // Empty dependency array, as dependencies are accessed via refs or are stable
   );
 
   // Main useEffect for Socket.IO connection and event handling
   useEffect(() => {
     console.log("Socket useEffect running or re-running...");
 
-    // Condition to prevent unnecessary socket connections:
-    // 1. If user is not yet loaded or is null, wait.
-    // 2. If chat is already initialized AND a socket connection already exists and is active, do nothing.
-    if (loadingAuth || !user) {
-      // <--- KEY CHANGE: Use 'user' instead of 'currentUser'
-      console.log(
-        "Waiting for user data to connect socket or user not logged in..."
-      );
-      // If user logs out while chat is active, disconnect socket and reset
-      if (!user && socketRef.current) {
-        // <--- Use 'user'
-        console.log("User logged out/not authenticated, disconnecting socket.");
+    if (loadingAuth) {
+      console.log("Waiting for user authentication to complete...");
+      return; // Wait until auth loading is complete
+    }
+
+    // Handle logout scenario or unauthenticated state
+    if (!user) {
+      console.log("User not logged in, ensuring socket is disconnected.");
+      if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
-        setMessages([]); // Clear messages on logout
-        setConversationId(null);
-        setIsChatInitialized(false);
       }
+      setMessages([]); // Clear messages on logout
+      setConversationId(null);
+      setIsChatInitialized(false);
       return;
     }
 
-    // If user IS available AND chat has already been initialized,
-    // we assume the socket is already set up and we don't need to re-run the setup logic.
+    // Prevent multiple socket connections/chat initiations if already running for the current user
     if (isChatInitialized && socketRef.current?.connected) {
       console.log(
         "Chat already initialized and socket connected. Skipping full setup."
@@ -190,34 +166,28 @@ const LiveChat: React.FC = () => {
       return;
     }
 
-    // If we reach here, it means:
-    // 1. user is available.
-    // 2. Either the chat is NOT initialized, or the socket is not connected/active.
-    //    So, we proceed with initialization.
-
-    console.log(
-      "Proceeding to initialize chat/socket for user:",
-      user.id // <--- Use 'user'
-    );
+    console.log("Initializing chat/socket for user:", user.id);
 
     const socket = io("http://localhost:5000", {
       transports: ["websocket", "polling"],
+      // Add a timeout for connection if needed
+      // timeout: 5000,
     });
     socketRef.current = socket;
 
     socket.on("connect", () => {
       console.log("Socket.IO connected:", socket.id);
 
-      // Only attempt to start/rejoin chat if it hasn't been initialized yet for this user session
-      if (!isChatInitialized) {
+      // Only attempt to start/rejoin chat if it hasn't been initialized yet for this session
+      // or if conversationId is null (meaning a fresh start needed)
+      if (!isChatInitialized || !conversationId) {
         fetch("http://localhost:5000/api/chat/start", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            userId: user.id, // <--- Use 'user'
-            customerName: user.name, // <--- Use 'user'
-            customerEmail: user.email, // <--- Use 'user'
-            // <--- 'user' from your AuthContext does NOT have 'phone'. Remove this line or add 'phone' to your AuthContext's user interface if your backend supports it.
+            userId: user.id,
+            customerName: user.name,
+            customerEmail: user.email,
           }),
         })
           .then((res) => {
@@ -241,8 +211,7 @@ const LiveChat: React.FC = () => {
           .then((data) => {
             console.log("Chat started/rejoined response:", data);
             setConversationId(data.conversationId);
-            // Set isChatInitialized to true ONLY AFTER a successful conversation ID is obtained
-            setIsChatInitialized(true);
+            setIsChatInitialized(true); // Mark as initialized upon successful conversation ID
 
             const fetchedMessages = data.initialMessages
               ? data.initialMessages.map((msg: any) => {
@@ -250,40 +219,32 @@ const LiveChat: React.FC = () => {
                     "Raw timestamp for initial message:",
                     msg.timestamp
                   );
-
-                  let formattedTimestamp: string = "N/A"; // Default value
-                  const dateObject = parseDateTimeString(msg.timestamp); // Use the robust parser
-
-                  if (dateObject) {
-                    // Check if parseDateTimeString returned a valid Date object
-                    formattedTimestamp = formatTime(dateObject);
-                  } else {
-                    console.warn(
-                      "Failed to parse initial message timestamp:",
-                      msg.timestamp
-                    );
-                  }
+                  const dateObject = parseDateTimeString(msg.timestamp);
+                  const formattedTimestamp = dateObject
+                    ? formatTime(dateObject)
+                    : "N/A";
 
                   return {
                     id: msg.id.toString(),
                     text: msg.content,
                     sender: msg.sender === "customer" ? "user" : "agent",
-                    timestamp: formattedTimestamp, // Use the checked and formatted timestamp
-                    read: msg.read_by_customer,
+                    timestamp: formattedTimestamp,
+                    read: msg.read_by_customer, // Use the boolean directly
                   };
                 })
               : [];
             setMessages(fetchedMessages);
 
+            // Join the conversation room via socket
             socket.emit("join_chat", {
               conversationId: data.conversationId,
               isAdmin: false,
             });
 
-            // Mark unread admin messages as read upon joining/fetching
+            // Mark unread admin messages as read upon joining/fetching if there are any
             const unreadAdminMessageIds = fetchedMessages
               .filter((msg: ChatMessage) => msg.sender === "agent" && !msg.read)
-              .map((msg: ChatMessage) => Number(msg.id));
+              .map((msg: ChatMessage) => Number(msg.id)); // Ensure ID is number
 
             if (unreadAdminMessageIds.length > 0) {
               socket.emit("mark_messages_read", {
@@ -291,6 +252,7 @@ const LiveChat: React.FC = () => {
                 readerType: "customer",
                 messageIds: unreadAdminMessageIds,
               });
+              // Optimistically update UI
               setMessages((prev) =>
                 prev.map((msg) =>
                   unreadAdminMessageIds.includes(Number(msg.id))
@@ -302,14 +264,11 @@ const LiveChat: React.FC = () => {
           })
           .catch((err) => {
             console.error("Failed to start/rejoin chat via API:", err);
-            // If starting chat failed, ensure isChatInitialized is false so it can retry
-            setIsChatInitialized(false);
-            // Also disconnect socket if chat start failed
-            socket.disconnect();
+            setIsChatInitialized(false); // Allow retry on failure
+            socket.disconnect(); // Disconnect socket if API failed
           });
       } else {
-        // If already initialized but `connect` event fired (e.g. re-connection),
-        // ensure we rejoin the chat room if we have a conversationId
+        // If already initialized and reconnected, just rejoin the room
         if (conversationIdRef.current) {
           socket.emit("join_chat", {
             conversationId: conversationIdRef.current,
@@ -347,16 +306,21 @@ const LiveChat: React.FC = () => {
         }
       }
     );
+    // Event when admin marks customer messages as read
     socket.on(
       "messages_read_by_admin",
-      (data: { conversationId: string; messageIds: number[] }) => {
+      (data: { conversationId: string; messageIds?: number[] }) => {
         if (data.conversationId === conversationIdRef.current) {
           setMessages((prev) =>
-            prev.map((msg) =>
-              data.messageIds.includes(Number(msg.id)) && msg.sender === "user"
+            prev.map((msg) => {
+              // If messageIds are provided, only mark those. Otherwise, mark all user messages.
+              const shouldMark = data.messageIds
+                ? data.messageIds.includes(Number(msg.id))
+                : msg.sender === "user";
+              return shouldMark && msg.sender === "user"
                 ? { ...msg, read: true }
-                : msg
-            )
+                : msg;
+            })
           );
         }
       }
@@ -385,37 +349,33 @@ const LiveChat: React.FC = () => {
       console.error("Socket.IO connection error:", err)
     );
 
+    // Cleanup function: disconnect socket when component unmounts or effect re-runs
     return () => {
-      // This cleanup runs when the component unmounts OR when dependencies change AND
-      // React is about to re-run the effect.
       if (socketRef.current) {
         console.log("Socket useEffect cleanup: Disconnecting socket.");
         socketRef.current.disconnect();
-        socketRef.current = null; // Ensure the ref is cleared
+        socketRef.current = null;
       }
     };
-  }, [user, handleIncomingMessage, loadingAuth]); // <--- KEY DEPENDENCY CHANGE: Use 'user'
+  }, [user, loadingAuth, handleIncomingMessage, conversationId]); // Add conversationId to dependencies for rejoining on reconnect
 
   const handleSendMessage = () => {
     if (inputText.trim() === "" || !conversationIdRef.current || !user) {
-      // <--- Use 'user'
       console.warn(
         "Message not sent: Input is empty, conversationId is missing, or user not loaded."
       );
       return;
     }
 
-    // For optimistic update, use current time
-    // If backend returns a different time, the incoming message event will update it.
     const now = new Date();
-    const formattedNow = formatTime(now); // Use the robust formatTime
+    const formattedNow = formatTime(now);
 
     const newMessage: ChatMessage = {
-      id: Date.now(), // Temp ID for optimistic update
+      id: Date.now(), // Temp ID for optimistic update, will be replaced by backend ID
       text: inputText.trim(),
       sender: "user", // For frontend display
-      timestamp: formattedNow, // Use formatted string immediately
-      read: true, // User's own message, so it's "read" by them immediately
+      timestamp: formattedNow,
+      read: true, // User's own message, read by them immediately
     };
 
     if (socketRef.current && socketRef.current.connected) {
@@ -423,12 +383,18 @@ const LiveChat: React.FC = () => {
         conversationId: conversationIdRef.current,
         content: newMessage.text,
         sender: "customer", // Send as 'customer' to backend
-        userId: user.id, // Pass actual user ID // <--- Use 'user'
-        customerName: user.name, // Pass actual customer name // <--- Use 'user'
+        userId: user.id,
+        customerName: user.name,
+        customerEmail: user.email,
       });
       setMessages((prevMessages) => [...prevMessages, newMessage]);
       setInputText("");
 
+      // Ensure stop_typing is sent after message
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
       socketRef.current.emit("stop_typing", {
         conversationId: conversationIdRef.current,
         sender: "customer",
@@ -448,14 +414,17 @@ const LiveChat: React.FC = () => {
       !conversationIdRef.current ||
       !socketRef.current ||
       !socketRef.current.connected ||
-      !user // <--- Use 'user'
+      !user
     )
       return;
 
-    socketRef.current.emit("typing", {
-      conversationId: conversationIdRef.current,
-      sender: "customer",
-    });
+    // Only emit 'typing' if it's the first character or after a timeout
+    if (!typingTimeoutRef.current) {
+      socketRef.current.emit("typing", {
+        conversationId: conversationIdRef.current,
+        sender: "customer",
+      });
+    }
 
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
@@ -465,43 +434,44 @@ const LiveChat: React.FC = () => {
         conversationId: conversationIdRef.current,
         sender: "customer",
       });
+      typingTimeoutRef.current = null; // Clear timeout ref once stopped
     }, 3000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleSendMessage();
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
     }
   };
 
   const handleEndChat = () => {
     if (window.confirm("Are you sure you want to end this chat?")) {
       if (conversationIdRef.current && user) {
-        // <--- Use 'user'
         if (socketRef.current && socketRef.current.connected) {
           socketRef.current.emit("chat_resolved_by_customer", {
             conversationId: conversationIdRef.current,
-            resolvedBy: user.id, // Send actual user ID // <--- Use 'user'
+            resolvedBy: user.id,
           });
+          // Optimistically update UI
           alert("Chat ended. Thank you for contacting support!");
           setMessages([]);
           setConversationId(null);
-          setIsChatInitialized(false); // Allow re-initiation
-          if (socketRef.current) socketRef.current.disconnect();
+          setIsChatInitialized(false);
+          if (socketRef.current) {
+            socketRef.current.disconnect();
+            socketRef.current = null;
+          }
         } else {
           console.error(
             "Socket not connected, attempting to resolve chat via API."
           );
+          // Fallback to API if socket is not connected
           fetch(
             `http://localhost:5000/api/chat/${conversationIdRef.current}/resolve`,
             {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ resolvedBy: user.id }), // Send actual user ID // <--- Use 'user'
+              body: JSON.stringify({ resolvedBy: user.id }),
             }
           )
             .then((res) => {
@@ -509,7 +479,7 @@ const LiveChat: React.FC = () => {
                 alert("Chat ended. Thank you for contacting support!");
                 setMessages([]);
                 setConversationId(null);
-                setIsChatInitialized(false); // Allow re-initiation
+                setIsChatInitialized(false);
                 if (socketRef.current) socketRef.current.disconnect();
               } else {
                 alert("Failed to end chat. Please try again.");
@@ -519,14 +489,13 @@ const LiveChat: React.FC = () => {
         }
       } else {
         alert("No active chat or user not loaded to end.");
-        setMessages([]);
+        setMessages([]); // Clear messages anyway
       }
     }
   };
 
   // Render nothing or a loading state if user is null
   if (loadingAuth) {
-    // <--- KEY CHANGE: Use loadingAuth from AuthContext
     return (
       <div className="min-h-screen bg-soft-ivory flex flex-col items-center justify-center">
         <Navigation />
@@ -536,7 +505,6 @@ const LiveChat: React.FC = () => {
   }
 
   if (!user) {
-    // <--- KEY CHANGE: Use 'user' from AuthContext
     return (
       <div className="min-h-screen bg-soft-ivory flex flex-col items-center justify-center">
         <Navigation />
