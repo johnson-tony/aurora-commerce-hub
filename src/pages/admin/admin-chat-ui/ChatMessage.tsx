@@ -13,7 +13,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, isAdminView }) => {
   const messageAlignmentClass = isCustomer ? 'justify-start' : 'justify-end';
   const bubbleColorClass = isCustomer
     ? 'bg-gray-200 text-gray-800'
-    : 'bg-deep-indigo text-white'; // Assuming 'deep-indigo' is a color defined in your tailwind config
+    : 'bg-deep-indigo text-black'; // Assuming 'deep-indigo' is a color defined in your tailwind config
 
   const bubbleBorderRadius = isCustomer
     ? 'rounded-br-lg rounded-tl-lg rounded-tr-lg'

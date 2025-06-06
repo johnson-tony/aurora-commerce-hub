@@ -14,15 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { User, getRoleColor, getActiveStatusColor } from "@/types/user"; // Assuming you create a types file
+import { User, getActiveStatusColor } from "@/types/user";
 
-// Zod Schema for User Form Validation (moved here as it's directly related to the panel)
+// Zod Schema for User Form Validation
 const userFormSchema = z.object({
   name: z.string().min(1, { message: "User name is required" }),
   email: z.string().email({ message: "Invalid email address" }),
-  role: z.enum(["admin", "customer"], {
-    errorMap: () => ({ message: "Invalid role" }),
-  }),
   isActive: z.boolean(),
 });
 
@@ -49,7 +46,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
     register,
     handleSubmit,
     reset,
-    setValue,
+    setValue, // setValue is used for controlled components, especially with Select or programmatic changes
     formState: { errors },
   } = useForm<UserFormInputs>({
     resolver: zodResolver(userFormSchema),
@@ -61,14 +58,22 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
       reset({
         name: selectedUser.name,
         email: selectedUser.email,
-        role: selectedUser.role,
         isActive: selectedUser.isActive,
       });
-      // Ensure the form is correctly populated for the current state (view/edit)
     } else {
       reset(); // Clear form when no user is selected
     }
-  }, [selectedUser, reset, isEditingDetails]);
+  }, [selectedUser, reset]); // Removed isEditingDetails from deps as reset only depends on selectedUser
+
+  // Effect to manually set value for the Select component if you re-introduce it
+  // This is a common pattern for controlled components with react-hook-form and shadcn-ui Select
+  // useEffect(() => {
+  //   if (selectedUser && isEditingDetails) {
+  //     // Example if you had a 'role' Select
+  //     // setValue("role", selectedUser.role);
+  //     setValue("isActive", selectedUser.isActive); // For checkbox/switch
+  //   }
+  // }, [selectedUser, isEditingDetails, setValue]);
 
   const onSubmit: SubmitHandler<UserFormInputs> = (data) => {
     if (selectedUser) {
@@ -187,60 +192,6 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
             )}
           </div>
 
-          {/* User Role */}
-          <div className="space-y-2">
-            <Label
-              htmlFor="role"
-              className="flex items-center text-charcoal-gray"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="lucide lucide-shield w-4 h-4 mr-2"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-              </svg>{" "}
-              User Role
-            </Label>
-            {isEditingDetails ? (
-              <>
-                <Select
-                  onValueChange={(value: User["role"]) =>
-                    setValue("role", value)
-                  }
-                  defaultValue={selectedUser.role}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select Role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="customer">Customer</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.role && (
-                  <p className="text-red-500 text-sm">{errors.role.message}</p>
-                )}
-              </>
-            ) : (
-              <Badge
-                className={
-                  getRoleColor(selectedUser.role) + " text-lg px-3 py-1.5"
-                }
-              >
-                {selectedUser.role.charAt(0).toUpperCase() +
-                  selectedUser.role.slice(1)}
-              </Badge>
-            )}
-          </div>
-
           {/* User Active Status (toggle checkbox/switch) */}
           <div className="flex items-center space-x-2 pt-2">
             {isEditingDetails ? (
@@ -318,7 +269,7 @@ const UserDetailPanel: React.FC<UserDetailPanelProps> = ({
                 type="button"
                 onClick={() => {
                   setIsEditingDetails(false);
-                  reset();
+                  reset(); // Resets form to original selectedUser values
                 }}
               >
                 Cancel
