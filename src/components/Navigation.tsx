@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, ShoppingCart, Heart, User, Menu, X, LogIn, LogOut } from 'lucide-react'; // Import LogOut icon
+import { Search, ShoppingCart, Heart, User, Menu, X, LogIn, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '../context/AuthContext'; // <--- Import useAuth
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 
 const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const location = useLocation();
-  const { isAuthenticated, user, logout } = useAuth(); // <--- Get auth state and logout function
+  const { isAuthenticated, user, logout } = useAuth();
+  const { totalCartItems } = useCart(); // Get totalCartItems from CartContext
 
   const categories = [
     { name: 'Fashion', path: '/products/fashion' },
@@ -54,15 +56,19 @@ const Navigation = () => {
               <Heart className="w-5 h-5 text-icon-grey" />
               <span>Wishlist</span>
             </Link>
+            {/* Cart Link with Dynamic Count from Context */}
             <Link
               to="/cart"
               className="flex items-center space-x-1 text-text-dark hover:text-accent-blue transition-colors relative text-sm"
             >
               <ShoppingCart className="w-5 h-5 text-icon-grey" />
               <span>Cart</span>
-              <span className="absolute -top-2 -right-2 bg-accent-blue text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                3
-              </span>
+              {/* Conditional rendering: show badge only if totalCartItems is greater than 0 */}
+              {totalCartItems > 0 && (
+                <span className="absolute -top-2 -right-2 bg-accent-blue text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {totalCartItems}
+                </span>
+              )}
             </Link>
 
             {/* Conditional rendering based on authentication status */}
@@ -73,10 +79,10 @@ const Navigation = () => {
                   className="flex items-center space-x-1 text-text-dark hover:text-accent-blue transition-colors text-sm"
                 >
                   <User className="w-5 h-5 text-icon-grey" />
-                  <span>{user?.name || 'Profile'}</span> {/* Display user name if available */}
+                  <span>{user?.name || 'Profile'}</span>
                 </Link>
                 <button
-                  onClick={logout} // <--- Call logout function from context
+                  onClick={logout}
                   className="flex items-center space-x-1 text-text-dark hover:text-accent-blue transition-colors text-sm bg-transparent border-none cursor-pointer"
                 >
                   <LogOut className="w-5 h-5 text-icon-grey" />
@@ -166,10 +172,15 @@ const Navigation = () => {
               </Link>
               <Link
                 to="/cart"
-                className="block py-2 text-text-dark hover:text-accent-blue transition-colors"
+                className="py-2 text-text-dark hover:text-accent-blue transition-colors flex items-center space-x-2"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Cart
+                  <span>Cart</span>
+                  {totalCartItems > 0 && (
+                     <span className="bg-accent-blue text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                       {totalCartItems}
+                     </span>
+                  )}
               </Link>
               <Link
                 to="/orders"
@@ -183,7 +194,7 @@ const Navigation = () => {
                 className="block py-2 text-text-dark hover:text-accent-blue transition-colors"
                 onClick={() => setIsMenuOpen(false)}
               >
-                {user?.name || 'Profile'} {/* Display user name */}
+                {user?.name || 'Profile'}
               </Link>
               <Link
                 to="/support"

@@ -3,43 +3,62 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast as shadcnToast } from '@/components/ui/use-toast'; // Assuming you have Shadcn UI toasts configured
-import OrderSummaryCard from './checkout/OrderSummaryCard';
+import OrderSummaryCard, { CartItem, AppliedCoupon } from './checkout/OrderSummaryCard'; // Import OrderSummaryCard and the types
 import ShippingStep, { ShippingDetails } from './checkout/ShippingStep';
 import PaymentStep, { PaymentDetails } from './checkout/PaymentStep';
 import ReviewStep from './checkout/ReviewStep';
+import Navigation from '@/components/Navigation'; // Assuming you have a Navigation component
+import { Button } from '@/components/ui/button'; // Assuming you have a Button component
 
 // --- Placeholder for useToast (replace with your actual Shadcn useToast import and implementation) ---
-// This simple mock is for demonstration if Shadcn's useToast is not yet hooked up.
 const useToast = () => {
-  return {
-      // CORRECTED type for 'variant' - only 'default' and 'destructive' allowed by your toast.tsx
-      toast: ({ title, description, variant }: { title: string; description: string; variant: "default" | "destructive" }) => { // <--- THIS IS THE FINAL CHANGE
-          console.log(`Toast: ${title} - ${description} (Variant: ${variant})`);
-          shadcnToast({ title, description, variant });
-      }
-  };
+    return {
+        toast: ({ title, description, variant }: { title: string; description: string; variant: "default" | "destructive" }) => {
+            console.log(`Toast: ${title} - ${description} (Variant: ${variant})`);
+            shadcnToast({ title, description, variant });
+        }
+    };
 };
 // --- End Placeholder ---
 
 // Define core types for Checkout data
+// These should ideally match your CartContext's CartItem if coming from there
+// For simplicity, I'm keeping the original Checkout.tsx CartItem and aligning if possible
+// The CartContext's CartItem looks like this:
+/*
 interface CartItem {
-  id: number;
-  name: string;
-  price: number;
-  originalPrice?: number; // Optional
+  cart_item_id: number;
+  product_id: number;
   quantity: number;
-  image: string;
-  inStock: boolean;
+  selected_size: string | null;
+  selected_color: string | null;
+  product_name: string;
+  product_price: number;
+  product_images: string[];
+  product_stock: number;
+}
+*/
+// You need to map the CartContext's CartItem to OrderSummaryCard's CartItem
+// The CartContext's CartItem has product_name, product_price, product_images[0]
+// The OrderSummaryCard's CartItem expects: id, name, price, quantity, image
+// Let's create a mapper function or adjust the CheckoutData's CartItem definition.
+
+// To align types, let's redefine Checkout's CartItem based on what OrderSummaryCard expects,
+// and make sure the data mapping handles this.
+// For the purpose of passing to OrderSummaryCard, we need:
+// id, name, price, quantity, image, originalPrice (optional)
+interface OrderCardCartItem { // Renamed to avoid conflict with CartContext's CartItem
+  id: number; // This can be product_id or cart_item_id
+  name: string; // product_name
+  price: number; // product_price
+  originalPrice?: number; // No direct equivalent in CartContext, keep as optional
+  quantity: number;
+  image: string; // product_images[0]
+  inStock?: boolean; // No direct equivalent in CartContext, keep as optional
 }
 
-interface AppliedCoupon {
-  code: string;
-  discount: number;
-  type: 'fixed' | 'percentage';
-}
-
-interface CheckoutData {
-  cartItems: CartItem[];
+export interface CheckoutData {
+  cartItems: OrderCardCartItem[]; // Use the new type here
   shipping: ShippingDetails;
   payment: PaymentDetails;
   appliedCoupon: AppliedCoupon | null;
@@ -49,16 +68,9 @@ interface CheckoutData {
   total: number;
 }
 
-// Initial default state for checkout (useful for development without a backend)
+// Initial default state for checkout
 const initialCheckoutData: CheckoutData = {
-  cartItems: [
-    // --- TEMPORARY MOCK CART ITEMS FOR DEVELOPMENT ---
-    // Remove these once you connect a backend to fetch real cart data.
-    { id: 101, name: 'Wireless Bluetooth Headphones', price: 99.99, originalPrice: 120.00, quantity: 1, image: 'https://via.placeholder.com/80/0000FF/FFFFFF?text=Headphones', inStock: true },
-    { id: 102, name: 'Ergonomic Office Chair', price: 249.99, originalPrice: 280.00, quantity: 1, image: 'https://via.placeholder.com/80/FF0000/FFFFFF?text=Chair', inStock: true },
-    { id: 103, name: '4K Ultra HD Monitor', price: 399.99, originalPrice: 450.00, quantity: 1, image: 'https://via.placeholder.com/80/00FF00/FFFFFF?text=Monitor', inStock: true },
-  ],
-  // --- END TEMPORARY MOCK ---
+  cartItems: [], // Start with an empty array, it will be populated from location.state
   shipping: {
     email: '', phone: '', fullName: '', address1: '', address2: '',
     city: '', state: '', zip: '', country: '', shippingMethod: 'standard'
@@ -72,11 +84,11 @@ const initialCheckoutData: CheckoutData = {
     method: 'card', // Default to card
     cardDetails: { cardNumber: '', cardName: '', expiryDate: '', cvv: '' },
   },
-  appliedCoupon: { code: 'DISCOUNT10', discount: 10, type: 'fixed' }, // Example applied coupon
-  subtotal: 0, // Will be calculated
-  savings: 0,   // Will be calculated
-  finalShipping: 0, // Will be calculated
-  total: 0,     // Will be calculated
+  appliedCoupon: null, // Start with no applied coupon
+  subtotal: 0,
+  savings: 0,
+  finalShipping: 0,
+  total: 0,
 };
 
 const Checkout: React.FC = () => {
@@ -86,14 +98,22 @@ const Checkout: React.FC = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [checkoutData, setCheckoutData] = useState<CheckoutData>(() => {
-    // Attempt to get cartItems from location.state, otherwise use mock data
-    const stateCartItems = (location.state as { cartItems?: CartItem[] })?.cartItems;
+    // Attempt to get cartItems from location.state (from Cart page)
+    const stateCartItems = (location.state as { cartItems?: any[] })?.cartItems; // Use 'any[]' initially
+
+    let mappedCartItems: OrderCardCartItem[] = [];
     if (stateCartItems && stateCartItems.length > 0) {
-      // If we have actual cart items from navigation, use them
-      return { ...initialCheckoutData, cartItems: stateCartItems };
+      mappedCartItems = stateCartItems.map(item => ({
+        id: item.product_id, // Or item.cart_item_id, depending on what ID you prefer to show
+        name: item.product_name,
+        price: item.product_price,
+        quantity: item.quantity,
+        image: item.product_images && item.product_images.length > 0 ? item.product_images[0] : '/placeholder.jpg',
+        // originalPrice and inStock are not directly from CartContext's CartItem, keep them undefined or add defaults
+      }));
     }
-    // Otherwise, fall back to initial mock data
-    return initialCheckoutData;
+
+    return { ...initialCheckoutData, cartItems: mappedCartItems };
   });
 
   // Effect to handle redirection if cart is empty
@@ -105,10 +125,10 @@ const Checkout: React.FC = () => {
         variant: "destructive",
       });
       navigate('/cart');
-      // Returning null from component to prevent render while redirect happens
       return;
     }
   }, [checkoutData.cartItems, navigate, toast]);
+
 
   // Effect to calculate totals whenever relevant data changes
   useEffect(() => {
@@ -116,8 +136,9 @@ const Checkout: React.FC = () => {
       (sum, item) => sum + item.price * item.quantity, 0
     );
 
+    // Calculate savings based on originalPrice if available
     const newSavings = checkoutData.cartItems.reduce(
-        (sum, item) => sum + (item.originalPrice ? (item.originalPrice - item.price) * item.quantity : 0), 0
+      (sum, item) => sum + (item.originalPrice ? (item.originalPrice - item.price) * item.quantity : 0), 0
     );
 
     let shippingCost = 0;
@@ -162,6 +183,45 @@ const Checkout: React.FC = () => {
   };
 
   const handleNextStep = () => {
+    // Add validation logic here before proceeding to the next step
+    if (currentStep === 1) {
+        // Validate shipping details
+        const { fullName, address1, city, state, zip, country, email, phone } = checkoutData.shipping;
+        if (!fullName || !address1 || !city || !state || !zip || !country || !email || !phone) {
+            toast({
+                title: "Missing Shipping Information",
+                description: "Please fill in all required shipping details.",
+                variant: "destructive",
+            });
+            return;
+        }
+    } else if (currentStep === 2) {
+        // Validate payment details
+        const { method, cardDetails, isBillingSameAsShipping, billingAddress } = checkoutData.payment;
+        if (method === 'card') {
+            const { cardNumber, cardName, expiryDate, cvv } = cardDetails;
+            if (!cardNumber || !cardName || !expiryDate || !cvv) {
+                toast({
+                    title: "Missing Card Details",
+                    description: "Please provide all required credit card information.",
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
+        if (!isBillingSameAsShipping) {
+            const { fullName, address1, city, state, zip, country, email, phone } = billingAddress;
+            if (!fullName || !address1 || !city || !state || !zip || !country || !email || !phone) {
+                toast({
+                    title: "Missing Billing Information",
+                    description: "Please fill in all required billing details.",
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
+    }
+
     setCurrentStep(prevStep => prevStep + 1);
   };
 
@@ -179,7 +239,7 @@ const Checkout: React.FC = () => {
       variant: "default",
     });
     // In a real app, navigate to an order confirmation page
-    navigate('/order-confirmation', { state: { orderId: 'ABC123XYZ' } });
+    navigate('/order-confirmation', { state: { orderId: 'ABC123XYZ', checkoutData: checkoutData } }); // Pass checkoutData for confirmation page if needed
   };
 
   // If cart is truly empty (e.g., after a redirect by useEffect), don't render anything
@@ -188,71 +248,70 @@ const Checkout: React.FC = () => {
   }
 
   return (
-    <div className="container mx-auto p-4 lg:p-8">
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Main Content Area */}
-        <div className="flex-1">
-          <h1 className="text-3xl font-bold mb-6 flex items-center">
-            Checkout
-            <span className="text-sm font-normal text-gray-500 ml-4 flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
-              Secure Checkout
-            </span>
-          </h1>
+    <div className="min-h-screen bg-gray-100">
+      <Navigation />
+      <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content Area (Steps) */}
+        <div className="lg:col-span-2 bg-white p-8 rounded-lg shadow-md">
+          <h2 className="text-3xl font-bold text-gray-800 mb-6">Checkout</h2>
 
-          {/* Progress Indicator */}
-          <div className="mb-8 flex justify-around items-center text-center">
-            {/* Replace with Shadcn Tabs/Segmented Control or custom component */}
-            <div className={`flex flex-col items-center p-2 rounded-md ${currentStep === 1 ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'text-gray-500'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 16V4h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2v12h8z"/><path d="M12 12V4"/></svg>
-              Shipping
+          {/* Stepper/Progress Indicator */}
+          <div className="flex justify-between items-center mb-8 border-b pb-4">
+            <div className={`flex-1 text-center ${currentStep === 1 ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
+              1. Shipping
             </div>
-            <div className="flex-1 border-t border-gray-300 mx-2"></div>
-            <div className={`flex flex-col items-center p-2 rounded-md ${currentStep === 2 ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'text-gray-500'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-              Payment
+            <div className={`flex-1 text-center ${currentStep === 2 ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
+              2. Payment
             </div>
-            <div className="flex-1 border-t border-gray-300 mx-2"></div>
-            <div className={`flex flex-col items-center p-2 rounded-md ${currentStep === 3 ? 'bg-indigo-100 text-indigo-800 font-semibold' : 'text-gray-500'}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-8.63"/><path d="M22 4L12 14.01l-3-3"/></svg>
-              Review
+            <div className={`flex-1 text-center ${currentStep === 3 ? 'text-blue-600 font-semibold' : 'text-gray-500'}`}>
+              3. Review
             </div>
           </div>
 
-          {/* Render current step component */}
-          {currentStep === 1 && (
-            <ShippingStep
-              shippingDetails={checkoutData.shipping}
-              onUpdate={handleUpdateShipping}
-              onNext={handleNextStep}
-              useToast={useToast} // Pass the toast utility
-            />
-          )}
-          {currentStep === 2 && (
-            <PaymentStep
-              paymentDetails={checkoutData.payment}
-              shippingDetails={checkoutData.shipping} // Pass for billing address pre-fill
-              onUpdate={handleUpdatePayment}
-              onNext={handleNextStep}
-              onPrev={handlePrevStep}
-              useToast={useToast} // Pass the toast utility
-            />
-          )}
-          {currentStep === 3 && (
-            <ReviewStep
-              shippingDetails={checkoutData.shipping}
-              paymentDetails={checkoutData.payment}
-              cartItems={checkoutData.cartItems}
-              onEditShipping={() => setCurrentStep(1)}
-              onEditPayment={() => setCurrentStep(2)}
-              onPlaceOrder={handlePlaceOrder}
-              useToast={useToast} // Pass the toast utility
-            />
-          )}
+          {/* Render Current Step */}
+          <div>
+            {currentStep === 1 && (
+              <ShippingStep
+                shippingDetails={checkoutData.shipping}
+                onUpdateShipping={handleUpdateShipping}
+              />
+            )}
+            {currentStep === 2 && (
+              <PaymentStep
+                paymentDetails={checkoutData.payment}
+                shippingDetails={checkoutData.shipping} // Pass shipping for billing address logic
+                onUpdatePayment={handleUpdatePayment}
+              />
+            )}
+            {currentStep === 3 && (
+              <ReviewStep
+                checkoutData={checkoutData}
+              />
+            )}
+          </div>
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between mt-8">
+            {currentStep > 1 && (
+              <Button onClick={handlePrevStep} variant="outline">
+                Previous
+              </Button>
+            )}
+            {currentStep < 3 && (
+              <Button onClick={handleNextStep} className="ml-auto bg-blue-600 hover:bg-blue-700 text-white">
+                Next
+              </Button>
+            )}
+            {currentStep === 3 && (
+              <Button onClick={handlePlaceOrder} className="ml-auto bg-green-600 hover:bg-green-700 text-white">
+                Place Order
+              </Button>
+            )}
+          </div>
         </div>
 
-        {/* Order Summary Sidebar */}
-        <div className="w-full lg:w-96">
+        {/* Order Summary Card Area */}
+        <div className="lg:col-span-1">
           <OrderSummaryCard
             cartItems={checkoutData.cartItems}
             subtotal={checkoutData.subtotal}

@@ -1,212 +1,122 @@
-
-import { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Filter, Grid, List, Star, Heart, ShoppingCart, ChevronDown } from 'lucide-react';
-import Navigation from '@/components/Navigation';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
+import Navigation from '@/components/Navigation'; // Assuming this exists
+import { Button } from '@/components/ui/button'; // Assuming this exists
+import { Card } from '@/components/ui/card';     // Assuming this exists
 
-const ProductListing = () => {
-  const { category } = useParams();
+// Import the new components
+import ProductCard from './ProductListing/ProductCard';
+import ProductFilters from './ProductListing/ProductFilters';
+import ProductHeader from './ProductListing/ProductHeader';
+
+// Define the Product interface to match your backend's output
+export interface Product {
+  id: number;
+  name: string;
+  description: string;
+  price: number;
+  discount: number;
+  stock: number;
+  category: string; // Ensure this matches your backend's category field
+  images: string[];
+  originalPrice?: number;
+  rating: number;
+  reviews: number;
+  brand?: string;
+}
+
+const ProductListing: React.FC = () => {
+  const { category } = useParams<{ category?: string }>();
+
+  // --- States for fetched products ---
+  const [fetchedProducts, setFetchedProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState<boolean>(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
+  // --- Filter and Sort States (managed in ProductListing) ---
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showFilters, setShowFilters] = useState(false);
-  const [priceRange, setPriceRange] = useState([0, 1000]);
+  // Initial price range can be set more dynamically based on fetched products
+  const [priceRange, setPriceRange] = useState([0, 1000]); // Assuming max price 1000 for demo
   const [sortBy, setSortBy] = useState('newest');
+  const [inStockFilter, setInStockFilter] = useState<boolean | null>(null); // null: show all, true: in stock, false: out of stock
 
-  const products = [
-    {
-      id: 1,
-      name: "Premium Wireless Headphones with Noise Cancellation",
-      price: 299,
-      originalPrice: 399,
-      rating: 4.8,
-      reviews: 124,
-      image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      category: "Electronics",
-      discount: 25,
-      inStock: true,
-      brand: "AudioPro",
-      description: "Experience crystal-clear audio with advanced noise cancellation technology."
-    },
-    {
-      id: 2,
-      name: "Designer Leather Jacket - Premium Quality",
-      price: 199,
-      originalPrice: 299,
-      rating: 4.6,
-      reviews: 89,
-      image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      category: "Fashion",
-      discount: 33,
-      inStock: true,
-      brand: "StyleCraft",
-      description: "Genuine leather jacket with contemporary design and perfect fit."
-    },
-    {
-      id: 3,
-      name: "Modern Minimalist Table Lamp",
-      price: 89,
-      originalPrice: 129,
-      rating: 4.7,
-      reviews: 156,
-      image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      category: "Home Decor",
-      discount: 31,
-      inStock: true,
-      brand: "LightCo",
-      description: "Elegant design that complements any modern living space."
-    },
-    {
-      id: 4,
-      name: "Smart Fitness Watch with Health Monitoring",
-      price: 249,
-      originalPrice: 299,
-      rating: 4.9,
-      reviews: 203,
-      image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2099&q=80",
-      category: "Electronics",
-      discount: 17,
-      inStock: true,
-      brand: "FitTech",
-      description: "Advanced fitness tracking with heart rate and sleep monitoring."
-    },
-    {
-      id: 5,
-      name: "Casual Cotton T-Shirt - Comfortable Fit",
-      price: 29,
-      originalPrice: 39,
-      rating: 4.4,
-      reviews: 67,
-      image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2080&q=80",
-      category: "Fashion",
-      discount: 26,
-      inStock: true,
-      brand: "ComfortWear",
-      description: "Soft, breathable cotton fabric perfect for everyday wear."
-    },
-    {
-      id: 6,
-      name: "Decorative Wall Art Set",
-      price: 79,
-      originalPrice: 99,
-      rating: 4.5,
-      reviews: 92,
-      image: "https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      category: "Home Decor",
-      discount: 20,
-      inStock: true,
-      brand: "ArtSpace",
-      description: "Beautiful abstract art prints to enhance your wall decor."
-    }
-  ];
+  // --- useEffect to fetch products from backend ---
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoadingProducts(true);
+      setProductsError(null);
+      try {
+        // Adjust category param for URL: lowercase and replace spaces with hyphens
+        const categoryParam = category ? category.toLowerCase().replace(/\s/g, '-') : 'all';
+        const url = categoryParam === 'all'
+          ? 'http://localhost:5000/api/products' // Endpoint for all products
+          : `http://localhost:5000/api/products/category/${categoryParam}`; // Endpoint for specific category
 
-  const getFilterOptions = () => {
-    const currentCategory = category || 'all';
-    
-    const fashionFilters = {
-      sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-      colors: ['Black', 'White', 'Blue', 'Red', 'Green', 'Yellow'],
-      styles: ['Casual', 'Formal', 'Sports', 'Vintage']
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data: Product[] = await response.json();
+        setFetchedProducts(data);
+
+        // Optionally, dynamically set the initial price range based on fetched products
+        if (data.length > 0) {
+          const maxPrice = Math.max(...data.map(p => p.price));
+          setPriceRange([0, Math.ceil(maxPrice)]); // Set max price to slightly above the highest product price
+        } else {
+          setPriceRange([0, 1000]); // Reset to default if no products
+        }
+
+      } catch (error: any) {
+        console.error("Error fetching products:", error);
+        setProductsError("Failed to load products. Please try again.");
+      } finally {
+        setLoadingProducts(false);
+      }
     };
 
-    const electronicsFilters = {
-      brands: ['Apple', 'Samsung', 'Sony', 'AudioPro', 'FitTech'],
-      features: ['Wireless', 'Noise Cancellation', 'Waterproof', 'Fast Charging'],
-      categories: ['Headphones', 'Smartphones', 'Laptops', 'Watches']
-    };
+    fetchProducts();
+  }, [category]); // Re-fetch when the category changes in the URL
 
-    const homeDecorFilters = {
-      rooms: ['Living Room', 'Bedroom', 'Kitchen', 'Bathroom', 'Office'],
-      materials: ['Wood', 'Metal', 'Glass', 'Fabric', 'Ceramic'],
-      styles: ['Modern', 'Traditional', 'Minimalist', 'Industrial']
-    };
+  // --- Memoized products after applying filters and sorting ---
+  const displayedProducts = useMemo(() => {
+    let tempProducts = [...fetchedProducts];
 
-    switch (currentCategory) {
-      case 'fashion':
-        return fashionFilters;
-      case 'electronics':
-        return electronicsFilters;
-      case 'home-decor':
-        return homeDecorFilters;
-      default:
-        return {};
+    // 1. Apply Price Range Filter
+    tempProducts = tempProducts.filter(product =>
+      product.price >= priceRange[0] && product.price <= priceRange[1]
+    );
+
+    // 2. Apply Stock Status Filter
+    if (inStockFilter !== null) {
+      tempProducts = tempProducts.filter(product => (product.stock > 0) === inStockFilter);
     }
-  };
 
-  const ProductCard = ({ product }: { product: any }) => (
-    <Card className="group overflow-hidden bg-white hover:shadow-lg transition-all duration-300">
-      <div className="relative">
-        <img
-          src={product.image}
-          alt={product.name}
-          className={`w-full ${viewMode === 'grid' ? 'h-48' : 'h-32'} object-cover group-hover:scale-105 transition-transform duration-300`}
-        />
-        <div className="absolute top-3 left-3 bg-coral-pink text-white px-2 py-1 rounded-lg text-sm font-medium">
-          -{product.discount}%
-        </div>
-        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button size="sm" variant="outline" className="bg-white/90 hover:bg-white">
-            <Heart className="w-4 h-4" />
-          </Button>
-        </div>
-        {!product.inStock && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <span className="text-white font-medium">Out of Stock</span>
-          </div>
-        )}
-      </div>
-      <div className="p-4">
-        <div className="text-xs text-electric-aqua font-medium mb-1">{product.brand}</div>
-        <h3 className="font-semibold text-charcoal-gray mb-2 line-clamp-2">{product.name}</h3>
-        {viewMode === 'list' && (
-          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
-        )}
-        <div className="flex items-center mb-2">
-          <div className="flex items-center">
-            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm text-charcoal-gray ml-1">{product.rating}</span>
-            <span className="text-xs text-gray-500 ml-1">({product.reviews} reviews)</span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <span className="text-lg font-bold text-deep-indigo">${product.price}</span>
-            <span className="text-sm text-gray-500 line-through">${product.originalPrice}</span>
-          </div>
-          <Button 
-            size="sm" 
-            className="bg-deep-indigo hover:bg-deep-indigo/90"
-            disabled={!product.inStock}
-          >
-            <ShoppingCart className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
+    // 3. Apply Sorting
+    tempProducts.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return b.id - a.id; // Assuming higher ID means newer
+      } else if (sortBy === 'price-low') {
+        return a.price - b.price;
+      } else if (sortBy === 'price-high') {
+        return b.price - a.price;
+      } else if (sortBy === 'rating') {
+        // Handle undefined ratings by treating them as 0 for sorting purposes
+        return (b.rating || 0) - (a.rating || 0);
+      } else if (sortBy === 'discount') {
+        return b.discount - a.discount;
+      }
+      return 0; // No change for unknown sort option
+    });
 
-  const filteredProducts = products.filter(product => {
-    if (category && category !== 'all') {
-      const categoryMap: { [key: string]: string } = {
-        'fashion': 'Fashion',
-        'electronics': 'Electronics',
-        'home-decor': 'Home Decor'
-      };
-      return product.category === categoryMap[category];
-    }
-    return true;
-  });
-
-  const filterOptions = getFilterOptions();
+    return tempProducts;
+  }, [fetchedProducts, priceRange, sortBy, inStockFilter]);
 
   return (
     <div className="min-h-screen bg-soft-ivory">
-      <Navigation />
-      
+      <Navigation /> {/* Assuming Navigation component exists and is imported */}
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Breadcrumb */}
         <nav className="text-sm mb-6">
@@ -214,151 +124,67 @@ const ProductListing = () => {
             <li><Link to="/" className="text-electric-aqua hover:underline">Home</Link></li>
             <li className="text-gray-400">/</li>
             <li className="text-charcoal-gray font-medium">
-              {category ? category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ') : 'All Products'}
+              {/* Capitalize first letter and replace hyphens with spaces for display */}
+              {category ? category.charAt(0).toUpperCase() + category.slice(1).replace(/-/g, ' ') : 'All Products'}
             </li>
           </ol>
         </nav>
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-charcoal-gray mb-2">
-              {category ? category.charAt(0).toUpperCase() + category.slice(1).replace('-', ' ') : 'All Products'}
-            </h1>
-            <p className="text-gray-600">{filteredProducts.length} products found</p>
-          </div>
-          
-          <div className="flex items-center space-x-4 mt-4 md:mt-0">
-            {/* Sort */}
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Newest</SelectItem>
-                <SelectItem value="price-low">Price: Low to High</SelectItem>
-                <SelectItem value="price-high">Price: High to Low</SelectItem>
-                <SelectItem value="rating">Highest Rated</SelectItem>
-                <SelectItem value="discount">Biggest Discount</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* View Mode */}
-            <div className="flex border rounded-lg bg-white">
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className={viewMode === 'grid' ? 'bg-deep-indigo text-white' : ''}
-              >
-                <Grid className="w-4 h-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className={viewMode === 'list' ? 'bg-deep-indigo text-white' : ''}
-              >
-                <List className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* Filter Toggle (Mobile) */}
-            <Button
-              variant="outline"
-              onClick={() => setShowFilters(!showFilters)}
-              className="md:hidden"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
-            </Button>
-          </div>
-        </div>
+        {/* Product Header Component */}
+        <ProductHeader
+          category={category}
+          productCount={displayedProducts.length}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          showFilters={showFilters}
+          setShowFilters={setShowFilters}
+        />
 
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Filters Sidebar */}
-          <div className={`w-full md:w-64 space-y-6 ${showFilters || window.innerWidth >= 768 ? 'block' : 'hidden'}`}>
-            <Card className="p-6 bg-white">
-              <h3 className="font-semibold text-charcoal-gray mb-4 flex items-center">
-                <Filter className="w-4 h-4 mr-2" />
-                Filters
-              </h3>
-              
-              {/* Price Range */}
-              <div className="mb-6">
-                <Label className="text-sm font-medium text-charcoal-gray mb-3 block">
-                  Price Range: ${priceRange[0]} - ${priceRange[1]}
-                </Label>
-                <Slider
-                  value={priceRange}
-                  onValueChange={setPriceRange}
-                  max={1000}
-                  step={10}
-                  className="w-full"
-                />
-              </div>
+          {/* Product Filters Component */}
+          <ProductFilters
+            category={category}
+            showFilters={showFilters}
+            setShowFilters={setShowFilters}
+            priceRange={priceRange}
+            setPriceRange={setPriceRange}
+            inStockFilter={inStockFilter}
+            setInStockFilter={setInStockFilter}
+          />
 
-              {/* Category-specific filters */}
-              {Object.entries(filterOptions).map(([filterType, options]) => (
-                <div key={filterType} className="mb-6">
-                  <Label className="text-sm font-medium text-charcoal-gray mb-3 block capitalize">
-                    {filterType}
-                  </Label>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {(options as string[]).map((option) => (
-                      <div key={option} className="flex items-center space-x-2">
-                        <Checkbox id={option} />
-                        <Label htmlFor={option} className="text-sm text-gray-600">
-                          {option}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-
-              {/* Stock Status */}
-              <div className="mb-6">
-                <Label className="text-sm font-medium text-charcoal-gray mb-3 block">
-                  Availability
-                </Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="in-stock" />
-                    <Label htmlFor="in-stock" className="text-sm text-gray-600">
-                      In Stock
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="out-of-stock" />
-                    <Label htmlFor="out-of-stock" className="text-sm text-gray-600">
-                      Out of Stock
-                    </Label>
-                  </div>
-                </div>
-              </div>
-
-              <Button className="w-full bg-coral-pink hover:bg-coral-pink/90">
-                Apply Filters
-              </Button>
-            </Card>
-          </div>
-
-          {/* Products Grid */}
+          {/* Products Grid / List Display */}
           <div className="flex-1">
-            <div className={`grid gap-6 ${
-              viewMode === 'grid' 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' 
-                : 'grid-cols-1'
-            }`}>
-              {filteredProducts.map((product) => (
-                <Link key={product.id} to={`/product/${product.id}`}>
-                  <ProductCard product={product} />
-                </Link>
-              ))}
+            {loadingProducts ? (
+              // Loading Skeleton
+              <div className={`grid gap-6 ${viewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
+                {[...Array(viewMode === 'grid' ? 6 : 3)].map((_, index) => (
+                  <Card key={index} className={`animate-pulse bg-gray-200 ${viewMode === 'grid' ? 'h-72' : 'h-48'}`}></Card>
+                ))}
+              </div>
+            ) : productsError ? (
+              // Error Message
+              <p className="text-red-500 text-lg text-center">{productsError}</p>
+            ) : displayedProducts.length === 0 ? (
+              // No Products Found Message
+              <p className="text-gray-500 text-lg text-center">No products found for this category or filter.</p>
+            ) : (
+              // Actual Product Cards
+              <div className={`grid gap-6 ${
+                viewMode === 'grid'
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' // Grid layout
+                  : 'grid-cols-1' // List layout (single column)
+              }`}>
+                {displayedProducts.map((product) => (
+                  <Link key={product.id} to={`/product/${product.id}`}>
+                    <ProductCard product={product} viewMode={viewMode} />
+                  </Link>
+                ))}
             </div>
+            )}
 
-            {/* Pagination */}
+            {/* Pagination (placeholder for now) */}
             <div className="flex justify-center items-center space-x-2 mt-12">
               <Button variant="outline" disabled>Previous</Button>
               <Button className="bg-deep-indigo text-white">1</Button>

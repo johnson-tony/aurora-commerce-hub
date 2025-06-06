@@ -1,10 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-// This will be initialized from app.locals.dbAll in server.js
 let dbAll;
 
-// Middleware to ensure dbAll is available (passed from server.js)
 router.use((req, res, next) => {
     if (!req.app.locals.dbAll) {
         console.error('Database connection not available in publicProductRoutes.');
@@ -18,17 +16,17 @@ router.use((req, res, next) => {
 // Endpoint: /api/products
 router.get('/', async (req, res) => {
     try {
-        // Only fetch products that are marked as available
-        const products = await dbAll('SELECT id, name, description, price, discount, stock, category, images FROM products WHERE available = 1');
+        // --- FIX IS HERE ---
+        // You need to explicitly include 'rating' and 'reviews' in your SELECT statement
+        const products = await dbAll('SELECT id, name, description, price, discount, stock, category, images, rating, reviews FROM products WHERE available = 1');
+        // --- END FIX ---
 
-        // Parse the 'images' JSON string back into an array of URLs for each product
         const productsWithParsedImages = products.map(product => {
             try {
-                // Ensure images is parsed, or default to an empty array if null/invalid
                 product.images = product.images ? JSON.parse(product.images) : [];
             } catch (e) {
                 console.error(`Error parsing images for product ID ${product.id}:`, e);
-                product.images = []; // Default to empty array on parse error
+                product.images = [];
             }
             return product;
         });
@@ -45,8 +43,8 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // Only fetch if available
-        const product = await dbAll('SELECT id, name, description, price, discount, stock, category, images FROM products WHERE id = ? AND available = 1', [id]);
+        // This one already correctly includes 'rating' and 'reviews'
+        const product = await dbAll('SELECT id, name, description, price, discount, stock, category, images, rating, reviews FROM products WHERE id = ? AND available = 1', [id]);
 
         if (product.length === 0) {
             return res.status(404).json({ message: 'Product not found or not available.' });
@@ -54,11 +52,10 @@ router.get('/:id', async (req, res) => {
 
         let singleProduct = product[0];
         try {
-            // Parse the 'images' JSON string back into an array of URLs
             singleProduct.images = singleProduct.images ? JSON.parse(singleProduct.images) : [];
         } catch (e) {
             console.error(`Error parsing images for product ID ${singleProduct.id}:`, e);
-            singleProduct.images = []; // Default to empty array on parse error
+            singleProduct.images = [];
         }
 
         res.status(200).json(singleProduct);
@@ -73,16 +70,14 @@ router.get('/:id', async (req, res) => {
 router.get('/category/:categoryName', async (req, res) => {
     const { categoryName } = req.params;
     try {
-        // Use LIKE for case-insensitive and flexible matching if needed,
-        // but for exact match, using '=' is fine.
-        // Assuming category names in DB are consistent (e.g., "Fashion", "Electronics").
-        // We'll use COLLATE NOCASE for case-insensitive comparison in SQLite.
+        // --- FIX IS HERE ---
+        // You also need to explicitly include 'rating' and 'reviews' in this SELECT statement
         const products = await dbAll(
-            'SELECT id, name, description, price, discount, stock, category, images FROM products WHERE category = ? COLLATE NOCASE AND available = 1',
+            'SELECT id, name, description, price, discount, stock, category, images, rating, reviews FROM products WHERE category = ? COLLATE NOCASE AND available = 1',
             [categoryName]
         );
+        // --- END FIX ---
 
-        // Parse the 'images' JSON string back into an array of URLs for each product
         const productsWithParsedImages = products.map(product => {
             try {
                 product.images = product.images ? JSON.parse(product.images) : [];

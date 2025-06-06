@@ -48,9 +48,9 @@ const ProductCard: React.FC<{ product: Product }> = ({ product }) => (
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
           <span className="text-lg font-bold text-deep-indigo">${product.price}</span>
-          <span className="text-sm text-gray-500 line-through">${product.originalPrice}</span>
+          <span className="text-sm text-gray-500 line-through">${product.price}</span>
         </div>
-        <Button size="sm" className="bg-deep-indigo hover:bg-deep-indigo/90">
+        <Button size="sm" className="bg-black hover:text-yellow-400">
           <ShoppingCart className="w-4 h-4" />
         </Button>
       </div>

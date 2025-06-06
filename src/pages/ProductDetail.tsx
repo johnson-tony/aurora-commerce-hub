@@ -1,34 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
 import Navigation from '@/components/Navigation';
-import { Button } from '@/components/ui/button';
-
-// Import page-specific components directly from the 'product-detail' subfolder
-import ProductImageGallery from './product-detail/ProductImageGallery';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import ProductInfo from './product-detail/ProductInfo';
 import ProductDetailsTabs from './product-detail/ProductDetailsTabs';
-import RelatedProductsSection from './product-detail/RelatedProductsSection';
+import ReviewFormModal from '../components/ReviewFormModal';
+import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/context/AuthContext';
+import { useCart } from '@/context/CartContext'; // Import useCart hook
 
-// Define Product and Review interfaces at the page level for clarity and reusability
 interface Product {
   id: number;
   name: string;
-  description: string;
   price: number;
-  originalPrice: number;
+  originalPrice?: number;
   rating: number;
-  reviews: number; // Total count of reviews
-  images: string[];
+  reviews: number;
   category: string;
-  brand: string;
   discount: number;
-  inStock: boolean;
-  stockCount: number;
-  features: string[];
-  specifications: { [key: string]: string };
+  stock: number;
   sizes?: string[];
   colors?: string[];
-  shipping: {
+  description: string;
+  features?: string[];
+  specifications?: { [key: string]: string };
+  images: string | string[];
+  shipping?: {
     free: boolean;
     days: string;
     returnDays: number;
@@ -37,218 +33,188 @@ interface Product {
 
 interface Review {
   id: number;
-  name: string;
+  reviewer_name: string;
   rating: number;
-  date: string;
-  title: string;
+  created_at: string;
+  title?: string;
   comment: string;
-  verified: boolean;
+  verified_purchase: number;
 }
 
 const ProductDetail: React.FC = () => {
-  const { id } = useParams(); // Get product ID from URL
-  const [productData, setProductData] = useState<Product | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const { id } = useParams<{ id: string }>();
+  const productId = id ? parseInt(id) : undefined;
 
-  // State for product details (managed locally or passed down)
-  const [selectedImage, setSelectedImage] = useState(0);
+  const [product, setProduct] = useState<Product | null>(null);
+  const [reviewsData, setReviewsData] = useState<Review[]>([]);
   const [quantity, setQuantity] = useState(1);
-  const [selectedSize, setSelectedSize] = useState('M'); // Default size
-  const [selectedColor, setSelectedColor] = useState('Black'); // Default color
+  const [selectedSize, setSelectedSize] = useState('');
+  const [selectedColor, setSelectedColor] = useState('');
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
-  // Mock product data (replace with actual fetch from backend)
-  const mockProduct: Product = {
-    id: 1,
-    name: "Premium Wireless Headphones with Advanced Noise Cancellation",
-    price: 299,
-    originalPrice: 399,
-    rating: 4.8,
-    reviews: 124,
-    images: [
-      "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      "https://images.unsplash.com/photo-1484704849700-f032a568e944?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      "https://images.unsplash.com/photo-1583394838336-acd977736f90?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2084&q=80"
-    ],
-    category: "Electronics",
-    brand: "AudioPro",
-    discount: 25,
-    inStock: true,
-    stockCount: 15,
-    description: "Experience exceptional audio quality with our premium wireless headphones featuring industry-leading noise cancellation technology. Perfect for music lovers, professionals, and anyone seeking superior sound quality.",
-    features: [
-      "Advanced Active Noise Cancellation",
-      "40-hour battery life",
-      "Premium comfort design",
-      "Hi-Res Audio certified",
-      "Quick charge technology",
-      "Voice assistant compatible"
-    ],
-    specifications: {
-      "Driver Size": "40mm",
-      "Frequency Response": "4Hz - 40kHz",
-      "Battery Life": "40 hours",
-      "Charging Time": "3 hours",
-      "Weight": "250g",
-      "Connectivity": "Bluetooth 5.0, USB-C"
-    },
-    sizes: ['S', 'M', 'L', 'XL'],
-    colors: ['Black', 'White', 'Silver'],
-    shipping: {
-      free: true,
-      days: "2-3 business days",
-      returnDays: 30
-    }
-  };
+  const { toast } = useToast();
+  const { user } = useAuth();
+  const { addCartItem } = useCart(); // Get addCartItem from useCart
 
-  const mockReviews: Review[] = [
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      rating: 5,
-      date: "2025-01-15",
-      title: "Absolutely Amazing!",
-      comment: "The sound quality is incredible and the noise cancellation really works. Best purchase I've made this year!",
-      verified: true
-    },
-    {
-      id: 2,
-      name: "Mike Chen",
-      rating: 4,
-      date: "2025-01-10",
-      title: "Great value for money",
-      comment: "Very comfortable to wear for long periods. The battery life is exactly as advertised.",
-      verified: true
-    },
-    {
-      id: 3,
-      name: "Emily Davis",
-      rating: 5,
-      date: "2025-01-08",
-      title: "Perfect for work",
-      comment: "These headphones are perfect for working from home. The noise cancellation blocks out all distractions.",
-      verified: true
-    }
-  ];
+  /**
+   * Fetches product details and associated reviews from the backend.
+   * Parses product images if they are stored as a JSON string.
+   */
+  const fetchProductAndReviews = async () => {
+    if (!productId) return;
 
-  const mockRelatedProducts = [
-    {
-      id: 2,
-      name: "Wireless Earbuds Pro",
-      price: 199,
-      image: "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2132&q=80",
-      rating: 4.6
-    },
-    {
-      id: 3,
-      name: "Studio Monitor Headphones",
-      price: 349,
-      image: "https://images.unsplash.com/photo-1524678606370-a47ad25cb82a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2069&q=80",
-      rating: 4.9
-    },
-    {
-      id: 4,
-      name: "Gaming Headset RGB",
-      price: 149,
-      image: "https://images.unsplash.com/photo-1599669454699-248893623440?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80",
-      rating: 4.4
-    }
-  ];
-
-  // --- Real Product Fetching Logic (Uncomment and implement when ready) ---
-  useEffect(() => {
-    const fetchProduct = async () => {
-      if (!id) {
-        setError("Product ID is missing.");
-        setLoading(false);
-        return;
+    try {
+      // Fetch product data
+      const productResponse = await fetch(`http://localhost:5000/api/products/${productId}`);
+      if (!productResponse.ok) {
+        throw new Error('Failed to fetch product data');
       }
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await fetch(`http://localhost:5000/api/products/${id}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+      const productData: Product = await productResponse.json();
+
+      // Parse images string to array if necessary
+      if (productData.images && typeof productData.images === 'string') {
+        try {
+          productData.images = JSON.parse(productData.images);
+          console.log('Parsed product images (from ProductDetail):', productData.images);
+        } catch (parseError) {
+          console.error('Failed to parse product images:', parseError);
+          productData.images = []; // Default to empty array on parse error
         }
-        const data: Product = await response.json();
-        setProductData(data);
-        // Set initial selected image, size, color based on fetched data
-        if (data.images && data.images.length > 0) setSelectedImage(0);
-        if (data.sizes && data.sizes.length > 0) setSelectedSize(data.sizes[0]);
-        if (data.colors && data.colors.length > 0) setSelectedColor(data.colors[0]);
-
-      } catch (err: any) {
-        console.error("Error fetching product:", err);
-        setError("Failed to load product details. Please try again later.");
-        setProductData(mockProduct); // Fallback to mock data on error for development
-      } finally {
-        setLoading(false);
+      } else if (!Array.isArray(productData.images)) {
+        productData.images = []; // Ensure it's an array for consistency
       }
-    };
+      setProduct(productData);
 
-    fetchProduct();
-  }, [id]); // Re-fetch when ID changes
+      // Fetch reviews data for the product
+      const reviewsResponse = await fetch(`http://localhost:5000/api/reviews/product/${productId}`);
+      if (!reviewsResponse.ok) {
+        throw new Error('Failed to fetch reviews data');
+      }
+      const { reviews } = await reviewsResponse.json();
+      setReviewsData(reviews);
 
-  // Use mock data if productData is null (e.g., during initial load or on error fallback)
-  const product = productData || mockProduct;
-  const reviews = mockReviews; // For now, reviews are static mock data
-  const relatedProducts = mockRelatedProducts; // For now, related products are static mock data
+      // Set initial selected size and color if available
+      if (productData.sizes && productData.sizes.length > 0) {
+        setSelectedSize(productData.sizes[0]);
+      }
+      if (productData.colors && productData.colors.length > 0) {
+        setSelectedColor(productData.colors[0]);
+      }
 
-
-  const handleQuantityChange = (delta: number) => {
-    setQuantity(Math.max(1, Math.min(product.stockCount, quantity + delta)));
+    } catch (error: any) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Could not load product details.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-soft-ivory flex items-center justify-center">
-        <p className="text-gray-700">Loading product details...</p>
-      </div>
-    );
-  }
+  // Effect hook to fetch data when productId changes
+  useEffect(() => {
+    fetchProductAndReviews();
+  }, [productId]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-soft-ivory">
-        <Navigation />
-        <div className="max-w-7xl mx-auto px-4 py-8 text-center">
-          <p className="text-red-600 text-lg">{error}</p>
-          <Link to="/products" className="mt-4 inline-block">
-            <Button>Back to Products</Button>
-          </Link>
-        </div>
-      </div>
-    );
+  /**
+   * Handles changes to the product quantity.
+   * Ensures quantity stays within valid range (1 to product stock).
+   * @param delta The change in quantity (e.g., +1 or -1).
+   */
+  const handleQuantityChange = (delta: number) => {
+    console.log('handleQuantityChange called. Delta:', delta);
+    if (product) {
+      setQuantity((prev) => {
+        const newQuantity = Math.max(1, Math.min(prev + delta, product.stock));
+        console.log('Old quantity:', prev, 'New quantity:', newQuantity, 'Product Stock:', product.stock);
+        return newQuantity;
+      });
+    } else {
+      console.log('Product is null, cannot change quantity.');
+    }
+  };
+
+  /**
+   * Handles adding the selected product with its quantity, size, and color to the cart.
+   * Utilizes the `addCartItem` function from the `CartContext`.
+   * Includes authentication check.
+   */
+  const handleAddToCart = async (
+    productToAdd: Product,
+    qty: number,
+    size: string,
+    color: string
+  ) => {
+    if (!productToAdd || qty <= 0) {
+      toast({
+        title: 'Error',
+        description: 'Invalid product or quantity to add to cart.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Authentication check before adding to cart
+    if (!user || !user.id) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to add items to your cart.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      // Call the addCartItem function from CartContext to handle the cart logic
+      await addCartItem(
+        productToAdd.id,
+        qty,
+        size,
+        color
+      );
+
+      // Display a success toast notification
+      toast({
+        title: 'Added to Cart!',
+        description: `${qty} x ${productToAdd.name} added to your cart.`,
+        variant: 'default',
+      });
+
+    } catch (error: any) {
+      console.error('Error adding to cart via context:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Could not add item to cart.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Display loading state if product data is not yet available
+  if (!product) {
+    return <div className="text-center py-10">Loading product details...</div>;
   }
 
   return (
     <div className="min-h-screen bg-soft-ivory">
       <Navigation />
+      <div className="container mx-auto px-4 py-8">
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Breadcrumb */}
-        <nav className="text-sm mb-6">
-          <ol className="flex items-center space-x-2">
-            <li><Link to="/" className="text-electric-aqua hover:underline">Home</Link></li>
-            <li className="text-gray-400">/</li>
-            {/* Dynamically link to category page */}
-            <li><Link to={`/products/${product.category.toLowerCase().replace(/\s/g, '-')}`} className="text-electric-aqua hover:underline">{product.category}</Link></li>
-            <li className="text-gray-400">/</li>
-            <li className="text-charcoal-gray font-medium">{product.name}</li>
-          </ol>
-        </nav>
+        {/* Product Information Section (Image and Details) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-16">
+          <div className="flex justify-center items-center h-96 bg-gray-100 rounded-lg overflow-hidden">
+            {Array.isArray(product.images) && product.images.length > 0 ? (
+              <img
+                src={product.images[0]} // Display the first image
+                alt={product.name}
+                className="object-cover w-full h-full"
+              />
+            ) : (
+              <span className="text-gray-500">No Image</span> // Fallback for no images
+            )}
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
-          {/* Product Images */}
-          <ProductImageGallery
-            images={product.images}
-            selectedImage={selectedImage}
-            discount={product.discount}
-            productName={product.name}
-            setSelectedImage={setSelectedImage}
-          />
-
-          {/* Product Info */}
+          {/* ProductInfo component to display product details and controls */}
           <ProductInfo
             product={product}
             quantity={quantity}
@@ -257,14 +223,27 @@ const ProductDetail: React.FC = () => {
             handleQuantityChange={handleQuantityChange}
             setSelectedSize={setSelectedSize}
             setSelectedColor={setSelectedColor}
+            onWriteReviewClick={() => setIsReviewModalOpen(true)} // Opens review modal
+            onAddToCart={handleAddToCart} // Passes the add to cart functionality
           />
         </div>
 
-        {/* Product Details Tabs */}
-        <ProductDetailsTabs product={product} reviewsData={reviews} />
+        {/* Product Details Tabs (Description, Features, Reviews) */}
+        <div className="mt-16">
+          <ProductDetailsTabs
+            product={product}
+            reviewsData={reviewsData}
+            onWriteReviewClick={() => setIsReviewModalOpen(true)} // Opens review modal from tabs
+          />
+        </div>
 
-        {/* Related Products */}
-        <RelatedProductsSection products={relatedProducts} />
+        {/* Review Form Modal */}
+        <ReviewFormModal
+          isOpen={isReviewModalOpen}
+          onClose={() => setIsReviewModalOpen(false)}
+          productId={product.id}
+          onReviewSubmitted={fetchProductAndReviews} // Refreshes data after a new review
+        />
       </div>
     </div>
   );
