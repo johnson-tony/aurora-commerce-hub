@@ -1,13 +1,19 @@
 // src/pages/admin/admin-chat-ui/ChatListPanel.tsx
-import React from 'react';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Search } from 'lucide-react';
-import ConversationListItem from './ConversationListItem'; // Local import from the same folder
+import React from "react";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Search } from "lucide-react";
+import ConversationListItem from "./ConversationListItem"; // Local import from the same folder
 
-import { ChatConversation } from '@/types/chat'; // Import from centralized types
+import { ChatConversation } from "@/types/chat"; // Import from centralized types
 
 interface ChatListPanelProps {
   conversations: ChatConversation[];
@@ -15,8 +21,12 @@ interface ChatListPanelProps {
   onSelectChat: (chatId: string) => void;
   searchTerm: string;
   onSearchChange: (term: string) => void;
-  filterStatus: 'all' | 'active' | 'pending' | 'resolved' | 'assigned';
-  onFilterStatusChange: (status: 'all' | 'active' | 'pending' | 'resolved' | 'assigned') => void;
+  filterStatus: "all" | "active" | "pending" | "resolved" | "assigned";
+  onFilterStatusChange: (
+    status: "all" | "active" | "pending" | "resolved" | "assigned"
+  ) => void;
+  // ADD THIS LINE:
+  typingStatus: Record<string, boolean>; // Object where key is chat ID (string) and value is boolean
 }
 
 const ChatListPanel: React.FC<ChatListPanelProps> = ({
@@ -27,8 +37,11 @@ const ChatListPanel: React.FC<ChatListPanelProps> = ({
   onSearchChange,
   filterStatus,
   onFilterStatusChange,
+  typingStatus, // ADD THIS HERE TO DESTRUCTURE
 }) => {
-  const pendingChatsCount = conversations.filter(c => c.status === 'pending').length;
+  const pendingChatsCount = conversations.filter(
+    (c) => c.status === "pending"
+  ).length;
 
   return (
     <Card className="w-80 flex-shrink-0 flex flex-col">
@@ -72,11 +85,15 @@ const ChatListPanel: React.FC<ChatListPanelProps> = ({
                 chat={chat}
                 isSelected={selectedChatId === chat.id}
                 onClick={onSelectChat}
+                // ADD THIS LINE:
+                isCustomerTyping={typingStatus[chat.id] || false} // Pass typing status for each chat item
               />
             ))}
           </div>
         ) : (
-          <p className="p-4 text-gray-500 text-center">No conversations found.</p>
+          <p className="p-4 text-gray-500 text-center">
+            No conversations found.
+          </p>
         )}
       </ScrollArea>
     </Card>
